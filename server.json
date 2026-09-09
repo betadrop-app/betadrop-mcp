@@ -1,0 +1,30 @@
+{
+  "$comment": "MCP Registry publish manifest. Schema fetched from https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json on 2026-09-03; that date is the current version at the time (pkg/model/constants.go CurrentSchemaVersion = 2025-12-11), and mcp-publisher rejects a deprecated one. Rules: `name` must equal `mcpName` in package.json and, under GitHub auth, must start with io.github.<org>; npm ownership is proven by that same mcpName field (docs/reference/server-json/official-registry-requirements.md); registryBaseUrl for npm may only be https://registry.npmjs.org. `version` here and packages[].version must match a version actually published on npm. mcp-publisher parses this file with a plain json.Unmarshal into a struct, so this comment key is dropped locally and never reaches the registry. repository/ is DELIBERATELY ABSENT: it is optional in the schema (required = name, description, version) and github.com/betadrop-app/betadrop-mcp does not exist, so declaring it would publish a 404 into the registry listing. The io.github.betadrop-app namespace authenticates against the ORG, which does exist (betadrop-app/upload-action), so publishing works without a repo. websiteUrl carries betadrop.app instead. If a public repo is ever created, add repository back.",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.betadrop-app/betadrop-mcp",
+  "title": "BetaDrop",
+  "description": "Publish iOS and Android builds to testers and manage share links from an AI coding agent.",
+  "version": "0.2.5",
+  "websiteUrl": "https://betadrop.app",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@betadrop/mcp",
+      "version": "0.2.5",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "BETADROP_TOKEN",
+          "description": "BetaDrop API token, created at Settings, Developer, API tokens. Optional: leave it unset and sign in through the server's own login tool, which stores the token in ~/.betadrop/config.json. Set it for CI or headless use.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

@@ -146,18 +146,20 @@ else
   # (client_id Iv23liUydBbI7Z2Q9bOZ), whose user-to-server token does not carry org membership
   # here.
   #
-  # What the registry's own docs prescribe instead (docs/modelcontextprotocol-io/authentication.mdx):
-  # authenticate with a Personal Access Token that can read the org role.
+  # The fix is to hand the publisher a token that ALREADY carries read:org rather than minting one
+  # through the device flow. `gh`'s own token does (gist, read:org, repo, workflow), so no new
+  # credential has to be created:
   #
-  #   Classic PAT       — grant the `read:org` scope.
-  #   Fine-grained PAT  — grant Organization permissions -> Members -> Read-only, and note a
-  #                       fine-grained PAT is bound to ONE resource owner, so create it against
-  #                       betadrop-app rather than the personal account.
+  #   mcp-publisher login github --token "$(~/.local/bin/gh auth token)" && mcp-publisher publish
   #
-  # Then, from this directory:
+  # Use the ABSOLUTE path: gh lives at ~/.local/bin/gh, which is not on the interactive shell's
+  # PATH. A bare $(gh auth token) expands to empty, mcp-publisher falls through to the device
+  # flow, and it looks like an unrelated failure.
   #
-  #   mcp-publisher login github --token <PAT>     # or export MCP_GITHUB_TOKEN=<PAT>
-  #   mcp-publisher publish
+  # A Personal Access Token works equally well and is what the registry's own docs prescribe
+  # (docs/modelcontextprotocol-io/authentication.mdx): classic PAT with the `read:org` scope, or a
+  # fine-grained PAT with Organization permissions -> Members -> Read-only — the latter is bound
+  # to ONE resource owner, so create it against betadrop-app, not the personal account.
   #
   # A token without that permission is not rejected — it silently publishes to the personal
   # namespace instead, which is why this script checks the result rather than trusting exit 0.
@@ -166,8 +168,8 @@ else
   if ! mcp-publisher publish 2>&1 | tee /tmp/mcp-publish.log; then
     if grep -qi "auth\|login\|token\|unauthor" /tmp/mcp-publish.log; then
       warn "Not authorised for the io.github.betadrop-app namespace."
-      echo "    The device flow does NOT grant it - use a PAT with read:org (see the note above):"
-      echo "      mcp-publisher login github --token <PAT>"
+      echo "    The device flow does NOT grant it - pass a token with read:org (see note above):"
+      echo "      mcp-publisher login github --token \"\$(~/.local/bin/gh auth token)\""
       echo "      cd $(pwd) && mcp-publisher publish"
     fi
   else

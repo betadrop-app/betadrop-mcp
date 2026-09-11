@@ -130,6 +130,26 @@ else
 
   mcp-publisher validate || fail "server.json is invalid — fix it before the registry sees it."
 
+  # Log in HERE, immediately before publishing, rather than relying on a session the caller set up
+  # earlier: the registry's JWT lives 5 minutes (exp - iat = 300), which is shorter than a release
+  # takes. `gh`'s token already carries read:org, which is what the org namespace needs, so this
+  # mints a fresh grant with no new credential. Absolute path on purpose — see the note above.
+  GH_BIN=""
+  for candidate in "$HOME/.local/bin/gh" "$(command -v gh 2>/dev/null || true)"; do
+    [ -n "$candidate" ] && [ -x "$candidate" ] && { GH_BIN="$candidate"; break; }
+  done
+
+  if [ -n "$GH_BIN" ] && GH_TOKEN_VALUE="$("$GH_BIN" auth token 2>/dev/null)" && [ -n "$GH_TOKEN_VALUE" ]; then
+    if mcp-publisher login github --token "$GH_TOKEN_VALUE" >/dev/null 2>&1; then
+      ok "Registry login refreshed via ${GH_BIN}"
+    else
+      warn "mcp-publisher login failed with gh's token; publishing with whatever session exists."
+    fi
+  else
+    warn "gh not found or not logged in — publishing with whatever registry session exists."
+    echo "    If this fails, see the authentication note above."
+  fi
+
   # AUTHENTICATION — read this before "just running the login again".
   #
   # The registry grants the io.github.betadrop-app/* namespace only to an *Owner* of the org, and

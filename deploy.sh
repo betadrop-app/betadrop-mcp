@@ -103,7 +103,7 @@ REGISTRY_OK=0
 if ! command -v mcp-publisher >/dev/null 2>&1; then
   warn "mcp-publisher is not installed — skipping the registry (npm is already published)."
   echo "    Install it:  brew install mcp-publisher"
-  echo "    Then run:    cd $(pwd) && mcp-publisher login github && mcp-publisher publish"
+  echo "    Then see the authentication note further down this script."
 elif [ -n "${SKIP_REGISTRY:-}" ]; then
   warn "SKIP_REGISTRY is set — not touching the MCP Registry."
 else
@@ -130,13 +130,45 @@ else
 
   mcp-publisher validate || fail "server.json is invalid — fix it before the registry sees it."
 
-  # `publish` exits non-zero when unauthenticated; the login is an interactive GitHub device flow
-  # against the betadrop-app org, so it cannot run unattended.
+  # AUTHENTICATION — read this before "just running the login again".
+  #
+  # The registry grants the io.github.betadrop-app/* namespace only to an *Owner* of the org, and
+  # it decides that by calling GET /user/memberships/orgs with the token and looking for
+  # role=admin, state=active (internal/api/handlers/v0/auth/github_at.go). kaushalrola is an
+  # active Owner, so the role is not the problem.
+  #
+  # `mcp-publisher login github` — the interactive device flow — does NOT produce a token that
+  # can see that. It was tried twice on 2026-09-11 and both times the registry minted a JWT
+  # carrying only `io.github.kaushalrola/*`, so `publish` answered 403 with a message about
+  # making org membership public. That advice is a red herring: membership is already public
+  # (GET /users/kaushalrola/orgs returns betadrop-app unauthenticated) and the handler does not
+  # consult public membership at all. The registry authenticates as a GitHub *App*
+  # (client_id Iv23liUydBbI7Z2Q9bOZ), whose user-to-server token does not carry org membership
+  # here.
+  #
+  # What the registry's own docs prescribe instead (docs/modelcontextprotocol-io/authentication.mdx):
+  # authenticate with a Personal Access Token that can read the org role.
+  #
+  #   Classic PAT       — grant the `read:org` scope.
+  #   Fine-grained PAT  — grant Organization permissions -> Members -> Read-only, and note a
+  #                       fine-grained PAT is bound to ONE resource owner, so create it against
+  #                       betadrop-app rather than the personal account.
+  #
+  # Then, from this directory:
+  #
+  #   mcp-publisher login github --token <PAT>     # or export MCP_GITHUB_TOKEN=<PAT>
+  #   mcp-publisher publish
+  #
+  # A token without that permission is not rejected — it silently publishes to the personal
+  # namespace instead, which is why this script checks the result rather than trusting exit 0.
+  #
+  # Registry JWTs last 5 minutes, so log in immediately before publishing, not hours ahead.
   if ! mcp-publisher publish 2>&1 | tee /tmp/mcp-publish.log; then
     if grep -qi "auth\|login\|token\|unauthor" /tmp/mcp-publish.log; then
-      warn "Not authenticated with the MCP Registry."
-      echo "    Run:  mcp-publisher login github    (device flow, needs the betadrop-app org)"
-      echo "    Then: cd $(pwd) && mcp-publisher publish"
+      warn "Not authorised for the io.github.betadrop-app namespace."
+      echo "    The device flow does NOT grant it - use a PAT with read:org (see the note above):"
+      echo "      mcp-publisher login github --token <PAT>"
+      echo "      cd $(pwd) && mcp-publisher publish"
     fi
   else
     REGISTRY_OK=1

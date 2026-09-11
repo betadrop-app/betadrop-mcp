@@ -7,9 +7,6 @@
     "type": "git",
     "url": "git+https://github.com/betadrop-app/betadrop-mcp.git"
   },
-  "bugs": {
-    "url": "https://github.com/betadrop-app/betadrop-mcp/issues"
-  },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -59,7 +56,7 @@
     "typescript": "^5.7.2"
   },
   "bugs": {
-    "url": "https://betadrop.app/contact/",
+    "url": "https://github.com/betadrop-app/betadrop-mcp/issues",
     "email": "support@betadrop.app"
   }
 }

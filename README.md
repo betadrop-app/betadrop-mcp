@@ -1,8 +1,36 @@
+<img src="https://betadrop.app/images/logo/BetaDropLogo.png" width="56" alt="BetaDrop" />
+
 # @betadrop/mcp
 
-> Distribute iOS & Android builds to testers — right from your AI-powered IDE.
+<!-- Absolute URLs only. npm renders this file on its own domain, so a relative src or href
+     resolves against npmjs.com and 404s — and the tarball ships only dist/, package.json and
+     this README, so there is no LICENSE file to reach even when a repository is set. Do not add
+     a badge for a workflow the public cannot see: it renders as a red "repo or workflow not
+     found" error at the top of the page. -->
 
-**BetaDrop MCP** connects your AI coding assistant (Claude, Cursor, Copilot, etc.) to [BetaDrop](https://betadrop.app) so you can publish builds, track releases, and manage API tokens — all through natural language prompts. No browser, no CLI, no context-switching.
+[![npm version](https://img.shields.io/npm/v/@betadrop/mcp?color=0b64fc&label=npm)](https://www.npmjs.com/package/@betadrop/mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.betadrop--app%2Fbetadrop--mcp-0b64fc)](https://registry.modelcontextprotocol.io)
+[![Node](https://img.shields.io/node/v/@betadrop/mcp?color=0b64fc)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/npm/l/@betadrop/mcp?color=0b64fc)](https://opensource.org/licenses/MIT)
+
+> **"Publish this build and send me the install link."**
+> Say that to your AI assistant and a tester can be installing the app thirty seconds later.
+
+[BetaDrop](https://betadrop.app) puts an iOS `.ipa` or Android `.apk` behind an over-the-air install
+link: testers open the link on their phone and install straight from the browser — no TestFlight
+review wait, no Play track, no tester accounts. If you have used Diawi or Firebase App Distribution,
+it does the same job.
+
+**BetaDrop MCP** moves that step to the other side of your AI assistant. Claude, Cursor, Copilot,
+Windsurf, Zed and Antigravity can publish builds, look up release history and manage API tokens
+through ordinary prompts — no browser tab, no CLI, no leaving the editor.
+
+```bash
+claude mcp add betadrop -s user -- npx -y @betadrop/mcp
+```
+
+**11 tools. One npx command. No build step.** Your assistant already knows how to use them — you
+never type a tool name.
 
 ---
 
@@ -250,9 +278,20 @@ You don't need to memorize any tool names — just talk to your AI assistant nat
 | `"Am I logged in to BetaDrop?"` | Shows your email, token details, and API URL |
 | `"Log out of BetaDrop"` | Revokes the token server-side and clears local config |
 
+#### 🔁 Chained, in one turn
+
+Because these are tools and not a chat bot, your assistant can string them together:
+
+> **"Build the release APK, publish it to BetaDrop with the last commit message as the notes, and give me the install link."**
+
+The build runs in your terminal, `betadrop_publish` uploads the artifact, and the link comes back
+in the same reply.
+
 ---
 
 ## 📖 All Available Tools
+
+Eleven tools across four areas. You never call these by name — the assistant picks them.
 
 ### Authentication
 
@@ -414,6 +453,20 @@ BETADROP_TOKEN=bd_live_xxx betadrop-mcp
 - Create a new token at [betadrop.app → Settings → Developer → API tokens](https://betadrop.app)
 - Log in again with the new token
 
+**The iOS build downloads on the phone but will not open?**
+- An ad-hoc `.ipa` only installs on devices that were in the provisioning profile when it was signed — publishing it does not change that. Send the tester the [UDID checker](https://betadrop.app/udid-checker/), add the device in the Apple Developer portal, and re-sign.
+
+---
+
+## Also from BetaDrop
+
+The same publish step, on the other two surfaces — one account, one set of API tokens:
+
+| | |
+|---|---|
+| **[`@betadrop/cli`](https://www.npmjs.com/package/@betadrop/cli)**<br><sub>[source](https://github.com/betadrop-app/betadrop-cli)</sub> | `betadrop publish app.ipa` from your terminal. Prints the install link and a scannable QR code. |
+| **[`betadrop-app/upload-action`](https://github.com/betadrop-app/upload-action)** | Publish from a GitHub Actions workflow. The install link lands on the run summary and, optionally, in a pull-request comment that updates itself on every push. |
+
 ---
 
 ## 📚 Links
@@ -425,8 +478,14 @@ BETADROP_TOKEN=bd_live_xxx betadrop-mcp
 ## Requirements
 
 - **Node.js 18+**
-- A [BetaDrop](https://betadrop.app) account
+- A [BetaDrop](https://betadrop.app) account — the free tier needs no card. Retention and
+  file-size ceilings by plan are on the [pricing page](https://betadrop.app/pricing/).
 - One of the supported AI editors (Claude, Cursor, VS Code, Windsurf, Zed, Antigravity)
+
+## Contributing
+
+Issues and pull requests: <https://github.com/betadrop-app/betadrop-mcp>. If this saved you a
+trip to the browser, a ⭐ helps other mobile teams find it.
 
 ## License
 

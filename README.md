@@ -22,14 +22,14 @@ review wait, no Play track, no tester accounts. If you have used Diawi or Fireba
 it does the same job.
 
 **BetaDrop MCP** moves that step to the other side of your AI assistant. Claude, Cursor, Copilot,
-Windsurf, Zed and Antigravity can publish builds, look up release history and manage API tokens
+Windsurf, Zed and Antigravity can publish builds, check they will install, manage standing links, devices and webhooks, and read tester feedback
 through ordinary prompts — no browser tab, no CLI, no leaving the editor.
 
 ```bash
 claude mcp add betadrop -s user -- npx -y @betadrop/mcp
 ```
 
-**11 tools. One npx command. No build step.** Your assistant already knows how to use them — you
+**23 tools. One npx command. No build step.** Your assistant already knows how to use them — you
 never type a tool name.
 
 ---
@@ -271,6 +271,16 @@ You don't need to memorize any tool names — just talk to your AI assistant nat
 | `"Create a token that expires in 30 days"` | Auto-expiring token for temporary access |
 | `"Revoke BetaDrop token abc-123"` | Permanently revokes a token |
 
+#### ✅ Release Checks, Links and Devices
+
+| Prompt | What Happens |
+|--------|--------------|
+| `"Will build/MyApp.ipa install from a link?"` | `betadrop_inspect` reads the profile and signing without publishing |
+| `"Publish MyApp.ipa to the acme-beta standing link"` | Publishes and points the standing link testers already have at it |
+| `"What did testers say about the last build?"` | Reads tester feedback |
+| `"Export my test devices for the Apple portal"` | Returns the tab-separated devices file |
+| `"Post new builds to this Slack webhook: https://hooks.slack.com/…"` | Creates a webhook formatted for Slack |
+
 #### 👤 Account
 
 | Prompt | What Happens |
@@ -291,7 +301,7 @@ in the same reply.
 
 ## 📖 All Available Tools
 
-Eleven tools across four areas. You never call these by name — the assistant picks them.
+Twenty-three tools across eight areas. You never call these by name — the assistant picks them.
 
 ### Authentication
 
@@ -324,6 +334,7 @@ Eleven tools across four areas. You never call these by name — the assistant p
 | `expiryTimeDays` | number | | Expire after N days (use with `time` or `combined`). Clamped to your plan's maximum build retention |
 | `expiryDownloadLimit` | number | | Expire after N downloads (use with `downloads` or `combined`) |
 | `expiryDeviceLimit` | number | | Expire after N unique devices (use with `devices` or `combined`) |
+| `standingLink` | string | | Slug of a [standing link](https://betadrop.app/standing-links/) to point at this build once it is live (must already be claimed on the account) |
 
 > **Expiry is capped by your plan.** `none` — a permanent link — is a paid-plan feature; on a plan
 > without it the build is stored as a dated one instead of being rejected. `expiryTimeDays` is
@@ -382,11 +393,46 @@ Each result includes the build name, version, platform, file size, status, dates
 | `abilities` | string[] | | `["publish"]`, `["read"]`, or `["*"]` (default: all) |
 | `expiresInDays` | number | | Token lifetime in days (1–365). Omit for no expiry |
 
-> Abilities are recorded on the token and shown by `betadrop_token_list`; publishing builds requires
-> the `publish` ability. Do not treat a `read` token as a hard security boundary across every
-> endpoint — scope it to a plan, and revoke tokens you no longer hand out.
+> Abilities are enforced on every endpoint: a `read` token can list builds, read feedback and run
+> `betadrop_inspect`, but cannot publish, delete, or change links, devices or webhooks.
 
 > ⚠️ The plaintext token is shown **exactly once** at creation. Copy it immediately!
+
+---
+
+### Release Checks
+
+| Tool | What It Does |
+|------|--------------|
+| `betadrop_inspect` | Will an `.ipa`/`.apk` install from a link? Profile type and expiry, signing, `testOnly`/`debuggable`. Nothing is published |
+
+### Standing Links
+
+| Tool | What It Does |
+|------|--------------|
+| `betadrop_list_standing_links` | Standing links, the build each serves, and follower counts |
+| `betadrop_point_standing_link` | Point one at an already-uploaded build; followers are emailed |
+
+`betadrop_publish` also accepts `standingLink` to point one at the new build as it goes live.
+
+### Builds, Feedback and Devices
+
+| Tool | What It Does |
+|------|--------------|
+| `betadrop_delete_build` | Delete a build; its install link stops working |
+| `betadrop_get_feedback` | Feedback testers left on a build |
+| `betadrop_list_devices` | Registered iOS devices (UDIDs) |
+| `betadrop_export_devices` | The devices file Apple's portal and fastlane `register_devices` accept |
+| `betadrop_invite_device` | A link a tester opens on their iPhone to register it |
+
+### Webhooks
+
+| Tool | What It Does |
+|------|--------------|
+| `betadrop_list_webhooks` | Webhooks on the account |
+| `betadrop_create_webhook` | Send events to a URL, Slack or Discord (detected from the URL) |
+| `betadrop_test_webhook` | Deliver a test event now and report the answer |
+| `betadrop_delete_webhook` | Remove a webhook |
 
 ---
 

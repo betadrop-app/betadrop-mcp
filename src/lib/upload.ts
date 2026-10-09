@@ -18,10 +18,14 @@ export interface UploadFields {
   expiry_time_days?: number;
   expiry_download_limit?: number;
   expiry_device_limit?: number;
+  /** A standing-link slug for the API to point at the new build (the API field is still `channel`). */
+  channel?: string;
 }
 
 interface UploadArgs {
   baseUrl: string;
+  /** Defaults to `/api/cli/publish`; `betadrop_inspect` sends the same body to `/api/inspect`. */
+  endpoint?: string;
   token: string;
   filePath: string;
   fields: UploadFields;
@@ -47,8 +51,9 @@ const CRLF = "\r\n";
  * progress as the request body is consumed. Uses the raw http/https client so
  * we get reliable upload-progress events.
  */
-export async function uploadBuild(args: UploadArgs): Promise<PublishResponse> {
+export async function uploadBuild<T = PublishResponse>(args: UploadArgs): Promise<T> {
   const {
+    endpoint = "/api/cli/publish",
     baseUrl,
     token,
     filePath,
@@ -85,6 +90,7 @@ export async function uploadBuild(args: UploadArgs): Promise<PublishResponse> {
   if (fields.expiry_time_days != null) addField("expiry_time_days", String(fields.expiry_time_days));
   if (fields.expiry_download_limit != null) addField("expiry_download_limit", String(fields.expiry_download_limit));
   if (fields.expiry_device_limit != null) addField("expiry_device_limit", String(fields.expiry_device_limit));
+  if (fields.channel) addField("channel", fields.channel);
   // Identify this publish as coming from the MCP server so the API counts it
   // against the `mcp` tool-usage key (see resolvePublishSource on the server).
   // Without this the request falls through to the `cli` default.
@@ -102,7 +108,7 @@ export async function uploadBuild(args: UploadArgs): Promise<PublishResponse> {
     `[betadrop-mcp] Uploading ${fileName} (${(totalBytes / 1024 / 1024).toFixed(1)} MB) to ${baseUrl}\n`,
   );
 
-  const url = new URL(`${baseUrl}/api/cli/publish`);
+  const url = new URL(`${baseUrl}${endpoint}`);
   const isHttps = url.protocol === "https:";
   const client = isHttps ? https : http;
   const agent = isHttps ? httpsAgent : httpAgent;
@@ -129,8 +135,8 @@ export async function uploadBuild(args: UploadArgs): Promise<PublishResponse> {
     }
   }
 
-  function attemptUpload(): Promise<PublishResponse> {
-    return new Promise<PublishResponse>((resolve, reject) => {
+  function attemptUpload(): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
       const req = client.request(
         url,
         {
@@ -155,7 +161,7 @@ export async function uploadBuild(args: UploadArgs): Promise<PublishResponse> {
               reject(new UnauthorizedError());
               return;
             }
-            let json: ApiResponse<PublishResponse>;
+            let json: ApiResponse<T>;
             try {
               json = JSON.parse(Buffer.concat(chunks).toString("utf8"));
             } catch {
@@ -170,7 +176,7 @@ export async function uploadBuild(args: UploadArgs): Promise<PublishResponse> {
               );
               return;
             }
-            resolve(json.data as PublishResponse);
+            resolve(json.data as T);
           });
         },
       );

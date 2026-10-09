@@ -54,6 +54,10 @@ export interface PublishResponse {
   retentionClamp?: RetentionClamp | null;
   /** Same contract: set only when this account already has a live build with these exact bytes. */
   duplicateOf?: DuplicateOf | null;
+  /** Set when a standing link was requested and now serves this build. */
+  channel?: { id: string; slug: string; label: string | null; url: string } | null;
+  /** Set when a standing link was requested, the build was stored, and the link did NOT move. */
+  channelWarning?: string | null;
 }
 
 /**
@@ -118,4 +122,42 @@ export interface TokenCreateResponse {
   token: string;
   abilities: string[];
   expires_at: string | null;
+}
+
+export interface InspectReport {
+  fileName: string;
+  platform: "ios" | "android";
+  installableFromLink: boolean;
+  checks: Array<{ id: string; level: "error" | "warning" | "ok"; message: string }>;
+  app: { name: string | null; bundleId: string | null; version: string | null; buildNumber: string | null };
+  ios: {
+    profile: {
+      kind: string;
+      teamName: string | null;
+      teamId: string | null;
+      expiresAt: string | null;
+      provisionedDeviceCount: number;
+      provisionsAllDevices: boolean;
+    } | null;
+  } | null;
+  android: { versionCode: number | null; targetSdk: number | null; debuggable: boolean } | null;
+}
+
+export interface StandingLink {
+  id: string;
+  slug: string;
+  label: string | null;
+  url: string;
+  followerCount?: number;
+  currentBuild: { id: string; name: string | null; version: string | null; createdAt: string | null } | null;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  format: string;
+  events: string[];
+  active: boolean;
+  disabledReason: string | null;
+  lastSuccessAt: string | null;
 }

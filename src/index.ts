@@ -19,6 +19,9 @@ import type {
   BuildListResponse,
   TokenListResponse,
   TokenCreateResponse,
+  InspectReport,
+  StandingLink,
+  Webhook,
 } from "./types.js";
 
 // ─── Process-level error handlers ────────────────────────────────────────────
@@ -142,6 +145,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: "number",
               description: "Expire after N unique devices (requires expiryType 'devices' or 'combined').",
             },
+            standingLink: {
+              type: "string",
+              description:
+                "Slug of a standing link to point at this build once it is live, so the one URL testers already have serves it. The slug must already be claimed on the account. See betadrop_list_standing_links.",
+            },
           },
           required: ["filePath"],
         },
@@ -256,6 +264,133 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ["tokenId"],
+        },
+      },
+
+      // ── Release checks ────────────────────────────────────────────────────
+      {
+        name: "betadrop_inspect",
+        description:
+          "Check whether an .ipa or .apk will install from an install link — provisioning profile type and expiry, signing, testOnly/debuggable flags — without publishing it. Use before betadrop_publish when a build might be signed wrong.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            filePath: { type: "string", description: "Absolute path to the .ipa or .apk." },
+          },
+          required: ["filePath"],
+        },
+      },
+
+      // ── Standing links ────────────────────────────────────────────────────
+      {
+        name: "betadrop_list_standing_links",
+        description:
+          "List standing links — one permanent install URL each, serving whichever build it was last pointed at — with the build each serves and how many testers follow it.",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "betadrop_point_standing_link",
+        description:
+          "Point a standing link at an already-uploaded build. Testers who follow the link are emailed about the new build.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            slug: { type: "string", description: "The standing link's slug." },
+            buildId: { type: "string", description: "Build ID (from betadrop_list_builds)." },
+          },
+          required: ["slug", "buildId"],
+        },
+      },
+
+      // ── Builds ────────────────────────────────────────────────────────────
+      {
+        name: "betadrop_delete_build",
+        description: "Delete a build. Its install link stops working immediately. Confirm with the user first.",
+        inputSchema: {
+          type: "object",
+          properties: { buildId: { type: "string", description: "Build ID to delete." } },
+          required: ["buildId"],
+        },
+      },
+      {
+        name: "betadrop_get_feedback",
+        description: "Read the feedback testers left on a build: bug reports, ratings and notes.",
+        inputSchema: {
+          type: "object",
+          properties: { buildId: { type: "string", description: "Build ID." } },
+          required: ["buildId"],
+        },
+      },
+
+      // ── iOS devices ───────────────────────────────────────────────────────
+      {
+        name: "betadrop_list_devices",
+        description: "List the iOS devices (UDIDs) registered on the account for ad-hoc provisioning.",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "betadrop_export_devices",
+        description:
+          "Export registered iOS devices as the tab-separated file Apple's 'Register Multiple Devices' upload and fastlane register_devices accept. Returns the file contents.",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "betadrop_invite_device",
+        description:
+          "Create a link a tester opens on their iPhone to register its UDID. With name and email BetaDrop emails a personal invite; with open=true it returns the account's shareable link.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Tester's name (for a personal invite)." },
+            email: { type: "string", description: "Tester's email (for a personal invite)." },
+            open: { type: "boolean", description: "Return the shareable link instead of emailing an invite." },
+          },
+        },
+      },
+
+      // ── Webhooks ──────────────────────────────────────────────────────────
+      {
+        name: "betadrop_list_webhooks",
+        description: "List webhooks that send build events to the user's systems, Slack or Discord.",
+        inputSchema: { type: "object", properties: {} },
+      },
+      {
+        name: "betadrop_create_webhook",
+        description:
+          "Send build events to a URL. Slack and Discord webhook URLs are detected and formatted as chat messages. Events: build.published, standing_link.updated, build.expiring, build.file_missing, tester.installed.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            url: { type: "string", description: "https URL, or a Slack/Discord incoming webhook URL." },
+            events: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: ["build.published", "standing_link.updated", "build.expiring", "build.file_missing", "tester.installed"],
+              },
+              description: "Events to send. Defaults to everything except tester.installed.",
+            },
+            format: { type: "string", enum: ["json", "slack", "discord"], description: "Omit to detect from the URL." },
+          },
+          required: ["url"],
+        },
+      },
+      {
+        name: "betadrop_test_webhook",
+        description: "Send a test event to a webhook now and report the receiver's answer.",
+        inputSchema: {
+          type: "object",
+          properties: { webhookId: { type: "string", description: "Webhook ID." } },
+          required: ["webhookId"],
+        },
+      },
+      {
+        name: "betadrop_delete_webhook",
+        description: "Delete a webhook.",
+        inputSchema: {
+          type: "object",
+          properties: { webhookId: { type: "string", description: "Webhook ID." } },
+          required: ["webhookId"],
         },
       },
     ],
@@ -373,6 +508,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           expiryTimeDays,
           expiryDownloadLimit,
           expiryDeviceLimit,
+          standingLink,
         } = args as {
           filePath: string;
           name?: string;
@@ -384,6 +520,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           expiryTimeDays?: number;
           expiryDownloadLimit?: number;
           expiryDeviceLimit?: number;
+          standingLink?: string;
         };
 
         const resolvedPath = path.resolve(filePath);
@@ -464,6 +601,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             expiry_time_days: expiryTimeDays,
             expiry_download_limit: expiryDownloadLimit,
             expiry_device_limit: expiryDeviceLimit,
+            channel: standingLink?.trim() || undefined,
           },
           onProgress: (sent, total) => {
             const pct = Math.floor((sent / total) * 100);
@@ -559,7 +697,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   // duplicate" would have to guess which of the two URLs to hand back.
                   (result.duplicateOf
                     ? `\n\nℹ️ ${result.duplicateOf.message}\nOriginal link: ${result.duplicateOf.url}`
-                    : ""),
+                    : "") +
+                  // The standing link is the URL worth handing out: it keeps serving the latest build.
+                  (result.channel
+                    ? `\n\n**Standing link ${result.channel.slug}** now serves this build: ${result.channel.url}`
+                    : "") +
+                  (result.channelWarning ? `\n\n⚠️ ${result.channelWarning}` : ""),
               },
             ],
           };
@@ -830,6 +973,229 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // ── Release checks ────────────────────────────────────────────────────
+
+      case "betadrop_inspect": {
+        const { filePath } = args as { filePath: string };
+        const resolvedPath = path.resolve(filePath);
+        const ext = path.extname(resolvedPath).toLowerCase();
+        if (ext !== ".ipa" && ext !== ".apk") {
+          throw new Error(`Unsupported file type "${ext}". Expected .ipa or .apk.`);
+        }
+        const token = await getToken();
+        if (!token) throw new Error("You are not logged in. Please run betadrop_login first.");
+        const r = await uploadBuild<InspectReport>({
+          baseUrl: await apiBaseUrl(),
+          token,
+          filePath: resolvedPath,
+          endpoint: "/api/inspect",
+          fields: {},
+        });
+        const mark = (l: string) => (l === "error" ? "✗" : l === "warning" ? "!" : "✓");
+        const p = r.ios?.profile;
+        const detail = p
+          ? `Profile: ${p.kind}, team ${p.teamName ?? "?"} (${p.teamId ?? "?"}), ${p.provisionsAllDevices ? "all devices" : `${p.provisionedDeviceCount} device(s)`}, expires ${p.expiresAt ?? "?"}\n`
+          : r.android
+            ? `versionCode ${r.android.versionCode ?? "?"}, targetSdk ${r.android.targetSdk ?? "?"}, debuggable ${r.android.debuggable}\n`
+            : "";
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `**${r.app.name ?? r.fileName}** ${r.app.version ?? ""}${r.app.buildNumber ? ` (${r.app.buildNumber})` : ""} · ${r.platform} · ${r.app.bundleId ?? ""}\n` +
+                detail +
+                `\n${r.checks.map((c) => `${mark(c.level)} ${c.message}`).join("\n")}\n\n` +
+                (r.installableFromLink
+                  ? "Verdict: installable from an install link."
+                  : "Verdict: this build will NOT install from an install link. Fix the ✗ items before publishing."),
+            },
+          ],
+        };
+      }
+
+      // ── Standing links ────────────────────────────────────────────────────
+
+      case "betadrop_list_standing_links": {
+        const res = await apiFetch<{ channels: StandingLink[] }>("/api/channels");
+        const links = res.data?.channels ?? [];
+        if (links.length === 0) {
+          return { content: [{ type: "text", text: "No standing links. Create one at https://betadrop.app/channels/" }] };
+        }
+        const lines = links.map(
+          (l) =>
+            `• ${l.slug} — ${l.url}\n  Serving: ${l.currentBuild ? `${l.currentBuild.name ?? "build"} ${l.currentBuild.version ?? ""} [${l.currentBuild.id}]` : "nothing yet"} · ${l.followerCount ?? 0} follower(s)`,
+        );
+        return { content: [{ type: "text", text: lines.join("\n\n") }] };
+      }
+
+      case "betadrop_point_standing_link": {
+        const { slug, buildId } = args as { slug: string; buildId: string };
+        const res = await apiFetch<{ channels: StandingLink[] }>("/api/channels");
+        const link = (res.data?.channels ?? []).find((l) => l.slug.toLowerCase() === slug.toLowerCase());
+        if (!link) throw new Error(`No standing link "${slug}" on this account. Call betadrop_list_standing_links.`);
+        await apiFetch(`/api/channels/${link.id}/build`, { method: "PUT", body: { buildId } });
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Standing link **${link.slug}** now serves build ${buildId}: ${link.url}` +
+                ((link.followerCount ?? 0) > 0 ? `\n${link.followerCount} follower(s) will be emailed.` : ""),
+            },
+          ],
+        };
+      }
+
+      // ── Builds ────────────────────────────────────────────────────────────
+
+      case "betadrop_delete_build": {
+        const { buildId } = args as { buildId: string };
+        await apiFetch(`/api/builds/${encodeURIComponent(buildId)}`, { method: "DELETE" });
+        return { content: [{ type: "text", text: `Build ${buildId} deleted. Its install link no longer works.` }] };
+      }
+
+      case "betadrop_get_feedback": {
+        const { buildId } = args as { buildId: string };
+        const res = await apiFetch<Array<Record<string, string | number | null>>>(
+          `/api/builds/${encodeURIComponent(buildId)}/feedback`,
+        );
+        const items = res.data ?? [];
+        if (items.length === 0) return { content: [{ type: "text", text: "No feedback on this build yet." }] };
+        const text = items
+          .map(
+            (f) =>
+              `• ${f.title || f.feedback_type} — ${f.reporter_name || f.reporter_email || "anonymous"}${f.rating ? ` · ${f.rating}/5` : ""} · ${f.created_at ?? ""}\n  ${String(f.description ?? "").replace(/\n/g, "\n  ")}`,
+          )
+          .join("\n\n");
+        return { content: [{ type: "text", text: `${items.length} report(s):\n\n${text}` }] };
+      }
+
+      // ── iOS devices ───────────────────────────────────────────────────────
+
+      case "betadrop_list_devices":
+      case "betadrop_export_devices": {
+        const res = await apiFetch<{ devices: Array<{ udid: string; label: string | null; product: string | null; tester_name: string | null; tester_email: string | null }> }>(
+          "/api/devices",
+        );
+        const devices = res.data?.devices ?? [];
+        if (name === "betadrop_export_devices") {
+          const clean = (v: string) => v.replace(/[\t\r\n]+/g, " ").trim();
+          const rows = devices.map((d) => `${d.udid}\t${clean(d.label ?? d.tester_name ?? d.product ?? "Device") || "Device"}\tios`);
+          const file = ["Device ID\tDevice Name\tDevice Platform", ...rows].join("\n") + "\n";
+          return {
+            content: [
+              {
+                type: "text",
+                text: `${devices.length} device(s). Save this as devices.txt for Apple's portal or fastlane register_devices:\n\n\`\`\`\n${file}\`\`\``,
+              },
+            ],
+          };
+        }
+        if (devices.length === 0) return { content: [{ type: "text", text: "No registered devices. Use betadrop_invite_device to collect some." }] };
+        return {
+          content: [
+            {
+              type: "text",
+              text: devices
+                .map((d) => `• ${d.udid} — ${d.label ?? d.product ?? "Device"}${d.tester_email ? ` (${d.tester_email})` : ""}`)
+                .join("\n"),
+            },
+          ],
+        };
+      }
+
+      case "betadrop_invite_device": {
+        const { name: testerName, email, open } = (args ?? {}) as { name?: string; email?: string; open?: boolean };
+        const body = open
+          ? { kind: "open" }
+          : { kind: "invite", tester_name: testerName, tester_email: email };
+        if (!open && (!testerName || !email)) {
+          throw new Error("Pass name and email for a personal invite, or open=true for the shareable link.");
+        }
+        const res = await apiFetch<{ link: { url: string; kind: string } }>("/api/devices/links", { method: "POST", body });
+        const url = res.data?.link.url;
+        return {
+          content: [
+            {
+              type: "text",
+              text: open
+                ? `Shareable UDID registration link: ${url}\nTesters open it on their iPhone.`
+                : `Invite emailed to ${email}. Their registration link: ${url}`,
+            },
+          ],
+        };
+      }
+
+      // ── Webhooks ──────────────────────────────────────────────────────────
+
+      case "betadrop_list_webhooks": {
+        const res = await apiFetch<{ webhooks: Webhook[] }>("/api/webhooks");
+        const hooks = res.data?.webhooks ?? [];
+        if (hooks.length === 0) return { content: [{ type: "text", text: "No webhooks." }] };
+        return {
+          content: [
+            {
+              type: "text",
+              text: hooks
+                .map(
+                  (w) =>
+                    `• [${w.id}] ${w.url} (${w.format}) — ${w.active ? "on" : `off${w.disabledReason ? `: ${w.disabledReason}` : ""}`}\n  Events: ${w.events.join(", ")}`,
+                )
+                .join("\n\n"),
+            },
+          ],
+        };
+      }
+
+      case "betadrop_create_webhook": {
+        const { url, events, format } = args as { url: string; events?: string[]; format?: string };
+        const res = await apiFetch<Webhook & { secret: string }>("/api/webhooks", {
+          method: "POST",
+          body: { url, ...(events ? { events } : {}), ...(format ? { format } : {}) },
+        });
+        const w = res.data!;
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                `Webhook created [${w.id}] (${w.format}) for: ${w.events.join(", ")}.` +
+                (w.format === "json"
+                  ? `\n\nSigning secret (shown once — store it where the receiver can read it): ${w.secret}\nVerify the BetaDrop-Signature header: HMAC-SHA256 of "<t>.<raw body>".`
+                  : "") +
+                `\n\nCall betadrop_test_webhook to send a test event.`,
+            },
+          ],
+        };
+      }
+
+      case "betadrop_test_webhook": {
+        const { webhookId } = args as { webhookId: string };
+        const res = await apiFetch<{ ok: boolean; statusCode: number | null; error: string | null; durationMs: number }>(
+          `/api/webhooks/${encodeURIComponent(webhookId)}/test`,
+          { method: "POST" },
+        );
+        const r = res.data!;
+        return {
+          content: [
+            {
+              type: "text",
+              text: r.ok
+                ? `Delivered — the receiver answered HTTP ${r.statusCode} in ${r.durationMs} ms.`
+                : `Not delivered: ${r.error ?? `HTTP ${r.statusCode}`}`,
+            },
+          ],
+          ...(r.ok ? {} : { isError: true }),
+        };
+      }
+
+      case "betadrop_delete_webhook": {
+        const { webhookId } = args as { webhookId: string };
+        await apiFetch(`/api/webhooks/${encodeURIComponent(webhookId)}`, { method: "DELETE" });
+        return { content: [{ type: "text", text: `Webhook ${webhookId} deleted.` }] };
+      }
+
       // ── Reference ─────────────────────────────────────────────────────────
 
       case "betadrop_help": {
@@ -930,6 +1296,67 @@ and query build history — all without leaving your IDE.
 - "Create a read-only BetaDrop token called 'CI Pipeline'"
 - "Create a BetaDrop token that expires in 30 days"
 - "Revoke BetaDrop token abc-123"
+
+---
+
+## Release Checks
+
+| Tool | Description |
+|------|-------------|
+| betadrop_inspect | Will this .ipa/.apk install from a link? Profile, signing, flags — nothing is published |
+
+**Example prompts:**
+- "Check build/MyApp.ipa will install before I publish it"
+- "Is this APK debuggable or testOnly?"
+
+---
+
+## Standing Links
+
+| Tool | Description |
+|------|-------------|
+| betadrop_list_standing_links | Standing links and the build each one serves |
+| betadrop_point_standing_link | Point a standing link at an uploaded build |
+
+\`betadrop_publish\` also takes \`standingLink\` to point one at the new build as it goes live.
+
+**Example prompts:**
+- "Publish MyApp.ipa to the acme-beta standing link"
+- "Point acme-beta at build 9fdd1bfa-…"
+
+---
+
+## Builds, Feedback and Devices
+
+| Tool | Description |
+|------|-------------|
+| betadrop_delete_build | Delete a build (its link stops working) |
+| betadrop_get_feedback | Feedback testers left on a build |
+| betadrop_list_devices | Registered iOS devices (UDIDs) |
+| betadrop_export_devices | Devices as Apple's / fastlane's tab-separated file |
+| betadrop_invite_device | A link a tester opens on their iPhone to register it |
+
+**Example prompts:**
+- "What did testers say about the last build?"
+- "Export my BetaDrop devices for the Apple portal"
+- "Send a UDID invite to sam@example.com"
+
+---
+
+## Webhooks
+
+| Tool | Description |
+|------|-------------|
+| betadrop_list_webhooks | Webhooks on the account |
+| betadrop_create_webhook | Send events to a URL, Slack or Discord |
+| betadrop_test_webhook | Send a test event now |
+| betadrop_delete_webhook | Delete a webhook |
+
+Events: build.published, standing_link.updated, build.expiring, build.file_missing, tester.installed.
+
+**Example prompts:**
+- "Post new BetaDrop builds to this Slack webhook: https://hooks.slack.com/services/…"
+- "Test my BetaDrop webhook"
 
 ---
 

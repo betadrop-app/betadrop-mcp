@@ -53,9 +53,34 @@ ok "Git working tree is clean"
 # Confirm the package name in package.json
 PKG_NAME=$(node -p "require('./package.json').name")
 CURRENT_VERSION=$(node -p "require('./package.json').version")
+PUBLISHED_LATEST=$(npm view "$PKG_NAME" version 2>/dev/null || echo "none")
+
+# Same rule as betadrop-cli/deploy.sh, for the same reason: a version bumped and committed but never
+# published is the version server.json, the docs and the release notes name. Bumping again skips it —
+# and `npm version <that same number>` is refused as "Version not changed", so it could not be asked
+# for explicitly either. Publish what is in package.json when npm does not have it yet and no bump
+# was named; an explicit argument still wins, and a taken version is still bumped.
+if npm view "${PKG_NAME}@${CURRENT_VERSION}" version >/dev/null 2>&1; then
+  VERSION_TAKEN=1
+else
+  VERSION_TAKEN=0
+fi
+if [ -z "${1:-}" ] && [ "$VERSION_TAKEN" -eq 0 ]; then
+  PUBLISH_AS_IS=1
+else
+  PUBLISH_AS_IS=0
+fi
+
 info "Package : ${BOLD}${PKG_NAME}${RESET}"
 info "Current : ${BOLD}v${CURRENT_VERSION}${RESET}"
-info "Bump    : ${BOLD}${BUMP}${RESET}"
+info "On npm  : ${BOLD}${PUBLISHED_LATEST}${RESET}"
+if [ "$PUBLISH_AS_IS" -eq 1 ]; then
+  info "Action  : ${BOLD}publish v${CURRENT_VERSION} as-is${RESET} (not on npm yet, no bump)"
+else
+  [ "$VERSION_TAKEN" -eq 1 ] && [ -z "${1:-}" ] && \
+    warn "v${CURRENT_VERSION} is already published; bumping instead."
+  info "Bump    : ${BOLD}${BUMP}${RESET}"
+fi
 
 echo ""
 read -r -p "$(echo -e "${YELLOW}Proceed with publishing?${RESET} [y/N] ")" CONFIRM
@@ -68,10 +93,15 @@ ok "No type errors"
 
 # ── 2. Bump version ────────────────────────────────────────────────────────
 step "2/7  Bumping version"
-# npm version also creates a git commit + tag automatically
-npm version "$BUMP" --no-git-tag-version   # update package.json only (we tag manually below)
-NEW_VERSION=$(node -p "require('./package.json').version")
-ok "Version bumped: ${CURRENT_VERSION} → ${NEW_VERSION}"
+if [ "$PUBLISH_AS_IS" -eq 1 ]; then
+  NEW_VERSION="$CURRENT_VERSION"
+  ok "Publishing v${NEW_VERSION} as committed — no bump"
+else
+  # npm version also creates a git commit + tag automatically
+  npm version "$BUMP" --no-git-tag-version   # update package.json only (we tag manually below)
+  NEW_VERSION=$(node -p "require('./package.json').version")
+  ok "Version bumped: ${CURRENT_VERSION} → ${NEW_VERSION}"
+fi
 
 # ── 3. Build ───────────────────────────────────────────────────────────────
 step "3/7  Building"
@@ -207,7 +237,12 @@ fi
 step "7/7  Git commit + tag + push"
 
 git add package.json package-lock.json server.json
-git commit -m "chore(release): ${PKG_NAME}@${NEW_VERSION}"
+# Nothing to commit when the version was published as-is; the tag is still worth having.
+if git diff --cached --quiet; then
+  info "package.json and server.json unchanged (published as-is) - tagging only"
+else
+  git commit -m "chore(release): ${PKG_NAME}@${NEW_VERSION}"
+fi
 git tag "v${NEW_VERSION}"
 git push origin HEAD
 git push origin "v${NEW_VERSION}"

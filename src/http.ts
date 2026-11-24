@@ -7,6 +7,7 @@ import { getClientAddress, withClientAddress, withRequestToken } from "./lib/con
 import { apiFetchWithToken } from "./lib/api.js";
 import { RateLimitedError, UnauthorizedError } from "./lib/errors.js";
 import { watchTokenRejection } from "./lib/tokenState.js";
+import { cleanLabel, withCallLog } from "./lib/callLog.js";
 
 /**
  * Remote mode: the MCP Streamable HTTP transport, behind nginx. It answers at the connector's own
@@ -198,27 +199,28 @@ const TOKEN_CHECK_GRACE_MS = 5 * 60_000;
 
 /** Tokens that passed the check recently, by token key. */
 class TokenChecks {
-  private passed = new Map<string, { until: number; at: number }>();
+  private passed = new Map<string, { until: number; at: number; user?: string }>();
 
   constructor(private readonly ttlMs: number) {}
 
-  async valid(token: string, key: string, now = Date.now()): Promise<boolean> {
+  /** The token's account (`user` undefined when the check named none), or undefined when it was refused. */
+  async valid(token: string, key: string, now = Date.now()): Promise<{ user?: string } | undefined> {
     const seen = this.passed.get(key);
-    if (seen && seen.until > now) return true;
-    let ok: boolean;
+    if (seen && seen.until > now) return { user: seen.user };
+    let result: { user?: string } | undefined;
     try {
-      ok = await tokenIsValid(token);
+      result = await tokenOwner(token);
     } catch (err) {
-      if (seen && now - seen.at < TOKEN_CHECK_GRACE_MS) return true;
+      if (seen && now - seen.at < TOKEN_CHECK_GRACE_MS) return { user: seen.user };
       throw err;
     }
-    if (!ok) {
+    if (!result) {
       this.passed.delete(key);
     } else if (this.ttlMs > 0) {
       if (this.passed.size > 10_000) this.sweep(now);
-      this.passed.set(key, { until: now + this.ttlMs, at: now });
+      this.passed.set(key, { until: now + this.ttlMs, at: now, user: result.user });
     }
-    return ok;
+    return result;
   }
 
   forget(key: string) {
@@ -231,14 +233,38 @@ class TokenChecks {
   }
 }
 
-/** One loopback request to the API, beside the tool's own. */
-async function tokenIsValid(token: string): Promise<boolean> {
+/**
+ * One loopback request to the API, beside the tool's own: the account the token belongs to (kept
+ * for the tool-call log), or undefined when the API refuses the token.
+ */
+async function tokenOwner(token: string): Promise<{ user?: string } | undefined> {
   try {
-    await apiFetchWithToken("/api/cli/whoami", token);
-    return true;
+    const res = await apiFetchWithToken<{ user?: { id?: unknown } }>("/api/cli/whoami", token);
+    const id = res.data?.user?.id;
+    return { user: typeof id === "string" || typeof id === "number" ? String(id) : undefined };
   } catch (err) {
-    if (err instanceof UnauthorizedError) return false;
+    if (err instanceof UnauthorizedError) return undefined;
     throw err;
+  }
+}
+
+/**
+ * What a 2025-era client said about itself in `initialize`, by token key. Stateless serving gives
+ * every request a fresh server, so a later `tools/call` cannot read it back from the session; the
+ * call log looks it up here. Bounded: cleared wholesale past 10,000 tokens.
+ */
+class ClientNames {
+  private byKey = new Map<string, { client?: string; proto?: string }>();
+
+  note(key: string, body: unknown) {
+    const msg = body as { method?: unknown; params?: { clientInfo?: { name?: unknown }; protocolVersion?: unknown } } | null;
+    if (!msg || typeof msg !== "object" || msg.method !== "initialize") return;
+    if (this.byKey.size > 10_000) this.byKey.clear();
+    this.byKey.set(key, { client: cleanLabel(msg.params?.clientInfo?.name), proto: cleanLabel(msg.params?.protocolVersion, 32) });
+  }
+
+  get(key: string) {
+    return this.byKey.get(key);
   }
 }
 
@@ -265,6 +291,7 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
   const resources = connectorResources(publicUrl, connectorUrl);
   const limiter = new RateLimiter(options.rateLimitPerMinute ?? RATE_LIMIT_PER_MINUTE);
   const checks = new TokenChecks(options.tokenCheckTtlMs ?? TOKEN_CHECK_TTL_MS);
+  const clientNames = new ClientNames();
   const logError = (err: Error) => process.stderr.write(`[betadrop-mcp] Server error: ${err.message}\n`);
   // Both legs answer with a single JSON body: nothing here streams (no progress over HTTP), and
   // one JSON body passes nginx unchanged. Each runs per request, inside its token and address.
@@ -363,7 +390,8 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
         { "Retry-After": String(wait) },
       );
     }
-    if (!(await checks.valid(token, key))) return unauthorized(res, resource, "invalid_token");
+    const passed = await checks.valid(token, key);
+    if (!passed) return unauthorized(res, resource, "invalid_token");
 
     let body: unknown;
     try {
@@ -373,7 +401,18 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
       return sendJson(res, 400, { jsonrpc: "2.0", error: { code: -32700, message }, id: null });
     }
 
-    const rejected = await watchTokenRejection(() => withRequestToken(token, () => serve(req, res, body)));
+    // What the tool-call log knows about this caller (lib/callLog.ts). A 2025-era client sends
+    // MCP-Protocol-Version on every request after initialize, and named itself in initialize.
+    clientNames.note(key, body);
+    const known = clientNames.get(key);
+    const logContext = {
+      user: passed.user,
+      client: known?.client,
+      proto: cleanLabel(req.headers["mcp-protocol-version"], 32) ?? known?.proto,
+    };
+    const rejected = await watchTokenRejection(() =>
+      withCallLog(logContext, () => withRequestToken(token, () => serve(req, res, body))),
+    );
     if (rejected) checks.forget(key);
   };
 

@@ -96,11 +96,11 @@ describe("tool registry", () => {
     const remote = await (await connect(true)).listTools();
     const names = local.tools.map((t) => t.name);
 
-    expect(names).toHaveLength(28);
+    expect(names).toHaveLength(35);
     expect(new Set(names).size).toBe(names.length);
     expect(names[0]).toBe("betadrop_welcome");
     expect(remote.tools.map((t) => t.name)).not.toEqual(expect.arrayContaining(["betadrop_publish"]));
-    expect(remote.tools).toHaveLength(23);
+    expect(remote.tools).toHaveLength(28);
   });
 
   it("gives every tool the title and hints the connector directory requires", async () => {
@@ -370,6 +370,28 @@ describe("betadrop_list_builds", () => {
     const { text } = await call(await connect(), "betadrop_list_expired_builds");
     expect(text).toContain(`· ID ${BUILD_ID}`);
     expect(api.seen[0].url).toContain("status=expired");
+  });
+
+  it("marks which expired builds a restore can bring back", async () => {
+    const retired = "6f1c2a3e-0000-4000-8000-0000000000aa";
+    const purged = "6f1c2a3e-0000-4000-8000-0000000000bb";
+    api = await fakeApi({
+      "/api/cli/builds": ok({
+        builds: [
+          build({ status: "expired", expiresAt: "2026-11-01T00:00:00Z" }),
+          build({ id: retired, status: "expired", expiresAt: "2026-11-01T00:00:00Z", restorable: true, payloadPurged: false }),
+          build({ id: purged, status: "expired", expiresAt: "2026-10-01T00:00:00Z", restorable: false, payloadPurged: true }),
+        ],
+        total: 3,
+        page: 1,
+        perPage: 20,
+      }),
+    });
+    const { text } = await call(await connect(), "betadrop_list_expired_builds");
+    const entry = (id: string) => text.split("• ").find((e) => e.includes(id)) ?? "";
+    expect(entry(retired)).toContain("Restorable");
+    expect(entry(purged)).toContain("File removed");
+    expect(entry(BUILD_ID)).not.toMatch(/Restorable|File removed/);
   });
 });
 

@@ -1,0 +1,2 @@
+Copied from betadrop-platform/web/src by scripts/sync-public-mirrors.sh: the website code
+this package imports as @/... Edit it in the monorepo, not here.

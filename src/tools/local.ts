@@ -10,4 +10,6 @@ export const LOCAL_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "betadrop_publish",
   "betadrop_upload_status",
   "betadrop_inspect",
+  "betadrop_convert_aab",
+  "betadrop_app_icons",
 ]);

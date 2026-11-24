@@ -1,6 +1,6 @@
 {
   "name": "@betadrop/mcp",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "Model Context Protocol (MCP) server for BetaDrop. Lets AI assistants publish iOS/Android builds, manage tokens, and list build history — directly from your IDE.",
   "mcpName": "io.github.betadrop-app/betadrop-mcp",
   "repository": {
@@ -55,6 +55,15 @@
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.4.0",
     "@types/node": "^22.10.2",
+    "@types/plist": "^3.0.5",
+    "@types/pngjs": "^6.0.5",
+    "@types/qrcode": "^1.5.6",
+    "jpeg-js": "^0.4.4",
+    "jsqr": "^1.4.0",
+    "jszip": "^3.10.2",
+    "plist": "^3.1.1",
+    "pngjs": "^5.0.0",
+    "qrcode": "^1.5.4",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^3.2.7"

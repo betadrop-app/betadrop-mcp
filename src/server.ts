@@ -2,6 +2,8 @@ import { Server, type CallToolResult } from "@modelcontextprotocol/server";
 import { TOOL_DEFINITIONS, TOOL_HANDLERS } from "./tools/index.js";
 import type { ProgressReporter } from "./tools/types.js";
 import { LOCAL_ONLY_TOOLS } from "./tools/local.js";
+import { errorClass, logToolCall } from "./lib/callLog.js";
+import { CliError } from "./lib/errors.js";
 
 export { LOCAL_ONLY_TOOLS };
 
@@ -48,6 +50,26 @@ export function createServer(remote = false): Server {
 
   server.setRequestHandler("tools/call", async (request, ctx) => {
     const { name, arguments: args } = request.params;
+    // One log line per call on the hosted connector, and none over stdio (see lib/callLog.ts). Who
+    // the client is comes from this request's own envelope on 2026-07-28, else from the session.
+    const started = performance.now();
+    const envelope = (ctx.mcpReq.envelope ?? {}) as {
+      "io.modelcontextprotocol/clientInfo"?: { name?: string };
+      "io.modelcontextprotocol/protocolVersion"?: string;
+    };
+    const logged = (tool: string, result: CallToolResult, thrown?: unknown, reason?: string): CallToolResult => {
+      logToolCall({
+        tool,
+        ok: !result.isError,
+        ms: performance.now() - started,
+        error: reason ?? (thrown === undefined ? undefined : errorClass(thrown)),
+        status: thrown instanceof CliError ? thrown.status : undefined,
+        // Both only labels; `logToolCall` drops anything that does not look like one.
+        client: envelope["io.modelcontextprotocol/clientInfo"]?.name ?? server.getClientVersion()?.name,
+        proto: envelope["io.modelcontextprotocol/protocolVersion"] ?? server.getNegotiatedProtocolVersion(),
+      });
+      return result;
+    };
     // Progress goes only to a client that asked for it with a progress token, and only while the
     // call is in flight: `notifications/progress` belongs to its request, and a publish that hands
     // its upload to the background keeps reporting after the call has answered. (Upload progress
@@ -68,20 +90,27 @@ export function createServer(remote = false): Server {
               .catch(() => {});
           };
     if (remote && LOCAL_ONLY_TOOLS.has(name)) {
-      return errorResult(
-        name === "betadrop_publish"
-          ? "Files on this computer cannot reach BetaDrop from here. Use betadrop_create_upload_link " +
-              "(the user drops the file in a browser) or betadrop_publish_from_url (for a public link)."
-          : `${name} needs files on your own machine, so it is only available ` +
-              "in the local server: claude mcp add betadrop -- npx -y @betadrop/mcp",
+      return logged(
+        name,
+        errorResult(
+          name === "betadrop_publish"
+            ? "Files on this computer cannot reach BetaDrop from here. Use betadrop_create_upload_link " +
+                "(the user drops the file in a browser) or betadrop_publish_from_url (for a public link)."
+            : `${name} needs files on your own machine, so it is only available ` +
+                "in the local server: claude mcp add betadrop -- npx -y @betadrop/mcp",
+        ),
+        undefined,
+        "local_only",
       );
     }
-    const handler = TOOL_HANDLERS[name];
-    if (!handler) return errorResult(`Tool not found: ${name}`);
+    // Own keys only, so a name such as "toString" is unknown rather than Object.prototype's.
+    const handler = Object.hasOwn(TOOL_HANDLERS, name) ? TOOL_HANDLERS[name] : undefined;
+    // Logged as "(unknown)": the name is whatever the client sent, so it is not ours to record.
+    if (!handler) return logged("(unknown)", errorResult(`Tool not found: ${name}`), undefined, "unknown_tool");
     try {
-      return await handler(args, { remote, name, progress });
+      return logged(name, await handler(args, { remote, name, progress }));
     } catch (error: unknown) {
-      return errorResult(error instanceof Error ? error.message : String(error));
+      return logged(name, errorResult(error instanceof Error ? error.message : String(error)), error);
     } finally {
       inFlight = false;
     }

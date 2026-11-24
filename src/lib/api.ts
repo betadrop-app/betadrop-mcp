@@ -116,7 +116,9 @@ export async function apiFetch<T = unknown>(
   }
 
   if (!response.ok || json.success === false) {
-    throw new CliError(json.error || json.message || `Request failed (HTTP ${response.status}).`);
+    const refused = new CliError(json.error || json.message || `Request failed (HTTP ${response.status}).`);
+    refused.status = response.status;
+    throw refused;
   }
 
   return json;

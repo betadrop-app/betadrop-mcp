@@ -383,10 +383,18 @@ const listExpiredBuilds: ToolHandler = async (args) => {
       ? new Date(b.expiresAt).toLocaleDateString()
       : "N/A";
     const url = b.installUrl ?? "no install link";
+    // Only a retired build with its file kept can be restored; one the hourly sweep has not
+    // retired yet, or a download/device limit stopped, is left unchanged by a restore.
+    const restore = b.restorable
+      ? "\n  Restorable: retired with its file still kept (betadrop_restore_build)."
+      : b.payloadPurged
+        ? "\n  File removed: it can no longer be restored."
+        : "";
     return (
       `• [${b.platform.toUpperCase()}] ${b.meta.name} v${b.meta.version} — ${size} MB\n` +
       `  Published: ${date} | Expired: ${expiredAt}\n` +
-      `  ${url} · ID ${b.id}`
+      `  ${url} · ID ${b.id}` +
+      restore
     );
   });
 
@@ -522,7 +530,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_list_expired_builds",
       description:
-        "List expired builds on BetaDrop, with the date each was published and its expiry date. Shortcut for betadrop_list_builds with status 'expired'. It does not say why a build expired.",
+        "List expired builds on BetaDrop, with the date each was published and its expiry date. Shortcut for betadrop_list_builds with status 'expired'. Builds BetaDrop has retired while keeping their file are marked restorable; those are the ones betadrop_restore_build brings back. It does not say why a build expired.",
       inputSchema: {
         type: "object",
         properties: {

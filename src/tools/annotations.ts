@@ -40,6 +40,15 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   betadrop_list_expired_builds: read("List expired builds"),
   betadrop_delete_build: destructive("Delete a build", { idempotentHint: true }),
   betadrop_get_feedback: read("Read tester feedback"),
+  // Brings a build back rather than removing anything, so not destructive; a second call on a
+  // restored build changes nothing, so idempotent. Its link only works again: nothing outside
+  // BetaDrop is contacted.
+  betadrop_restore_build: write("Restore an expired build", { idempotentHint: true }),
+  // Destructive: a new code replaces the old one, so the install URL testers already hold stops
+  // working, and a new password signs out everyone who unlocked the link. Not idempotent: setting
+  // the same password again signs them out again. Open-world: the change lands on a public URL in
+  // testers' hands, and removing a password opens the build to anyone who has the link.
+  betadrop_update_link: destructive("Change a build's install link", { openWorldHint: true }),
 
   betadrop_create_upload_link: write("Create an upload link"),
   betadrop_publish_from_url: write("Publish a build from a URL", { openWorldHint: true }),
@@ -47,6 +56,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
   betadrop_build_analytics: read("Build install analytics"),
   betadrop_inspect: read("Inspect a build file"),
+  betadrop_android_registration: { ...read("Check Android developer registration"), openWorldHint: true },
+  betadrop_convert_aab: write("Convert an .aab to a test-signed .apk"),
 
   betadrop_token_list: read("List API tokens"),
   betadrop_token_create: write("Create an API token"),
@@ -66,6 +77,11 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   betadrop_create_webhook: write("Create a webhook", { openWorldHint: true }),
   betadrop_test_webhook: write("Send a test webhook event", { openWorldHint: true }),
   betadrop_delete_webhook: destructive("Delete a webhook", { idempotentHint: true }),
+
+  // Generators: they make files from their inputs and never call the BetaDrop API.
+  betadrop_app_icons: destructive("Make app icon sets", { idempotentHint: true }),
+  betadrop_generate_plist: write("Generate a plist"),
+  betadrop_qr_code: write("Make a QR code"),
 
   betadrop_help: read("BetaDrop tool reference"),
 };

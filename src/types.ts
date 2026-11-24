@@ -163,6 +163,11 @@ export interface BuildListItem {
   /** Install counters. Absent from API servers older than the field. */
   downloads?: number;
   uniqueDevices?: number;
+  /** The file behind an expired entry is gone (purged). */
+  payloadPurged?: boolean;
+  /** A retired build whose file is still kept: `POST /api/builds/{id}/restore` brings it back.
+   *  Absent from API servers older than the field. */
+  restorable?: boolean;
   meta: {
     name: string;
     version: string;

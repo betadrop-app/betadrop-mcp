@@ -126,8 +126,19 @@ function reference(remote: boolean): string {
         ["betadrop_build_analytics", "Installs, devices, countries and failed installs for one build"],
         ["betadrop_get_feedback", "Feedback testers left on a build"],
         ["betadrop_delete_build", "Delete a build (its link stops working)"],
+        ["betadrop_restore_build", "Bring back a build retired after it expired, while its file is kept (uses storage again)"],
+        ["betadrop_update_link", "Set or remove a build link's password, or give it a custom code (Pro and Studio)"],
       ],
       [
+        [
+          "betadrop_update_link",
+          "**betadrop_update_link inputs:**\n" +
+            "- `buildId` (required) — the build whose install link changes\n" +
+            "- `password` — a new password (at least 4 characters); testers enter it on the install page\n" +
+            "- `removePassword` — true to make the link open to anyone who has it\n" +
+            "- `code` — a custom code, 6–12 letters and numbers; the old install URL stops working\n" +
+            "- `link` — the current code of the link to change, for a build with more than one",
+        ],
         [
           "betadrop_list_builds",
           "Each build in a list shows its ID. betadrop_delete_build, betadrop_get_feedback and betadrop_point_standing_link take that ID.",
@@ -159,15 +170,43 @@ function reference(remote: boolean): string {
         ["betadrop_build_analytics", "How is my latest build doing?"],
         ["betadrop_build_analytics", "Which countries and devices installed ShopEase?"],
         ["betadrop_get_feedback", "What did testers say about the last build?"],
+        ["betadrop_restore_build", "Restore my expired ShopEase build"],
+        ["betadrop_update_link", "Put a password on the link for my latest build"],
+        ["betadrop_update_link", "Change my latest build's link to /install/?i=acmebeta"],
       ],
     ),
     section(
       "Release checks",
-      [["betadrop_inspect", "Will this .ipa or .apk install from a link? Profile, signing, flags — nothing is published"]],
-      [],
+      [
+        [
+          "betadrop_inspect",
+          "Check an .ipa, .apk, .aab or .mobileprovision: profile, signing, 16 KB page size, Google registration, install-link verdict — nothing is published",
+        ],
+        ["betadrop_android_registration", "Is a package name and signing key registered with Google's developer verification?"],
+        ["betadrop_convert_aab", "Turn an .aab into one universal .apk, signed with a test key kept on this computer"],
+      ],
+      [
+        [
+          "betadrop_inspect",
+          "betadrop_inspect reads the file on this computer. The install-link verdict for an .ipa or .apk comes from BetaDrop and needs sign-in; the other checks don't.",
+        ],
+        [
+          "betadrop_convert_aab",
+          "**betadrop_convert_aab inputs:**\n" +
+            "- `filePath` (required) — absolute path to the .aab\n" +
+            "- `outputPath` — where to write the .apk (default: next to the .aab)\n" +
+            "- `overwrite` — replace an existing file at `outputPath`\n" +
+            "- `newTestKey` — sign with a new test key (testers then uninstall earlier converted APKs)\n\n" +
+            "The APK is signed with a test key, not the upload or release key: for testers, not for Google Play.",
+        ],
+      ],
       [
         ["betadrop_inspect", "Check build/MyApp.ipa will install before I publish it"],
         ["betadrop_inspect", "Is this APK debuggable or testOnly?"],
+        ["betadrop_inspect", "Does app-release.aab support 16 KB page sizes?"],
+        ["betadrop_inspect", "What's in this .mobileprovision?"],
+        ["betadrop_android_registration", "Is com.example.app registered with Google for this SHA-256?"],
+        ["betadrop_convert_aab", "Convert app-release.aab to an APK I can share"],
       ],
     ),
     section(
@@ -236,6 +275,36 @@ function reference(remote: boolean): string {
       [
         ["betadrop_create_webhook", "Post new BetaDrop builds to this Slack webhook: https://hooks.slack.com/services/…"],
         ["betadrop_test_webhook", "Test my BetaDrop webhook"],
+      ],
+    ),
+    section(
+      "Developer tools",
+      [
+        ["betadrop_app_icons", "iOS and Android app icon sets from one image, with the App Store and Play icons"],
+        ["betadrop_generate_plist", "An ExportOptions.plist or an OTA manifest.plist"],
+        ["betadrop_qr_code", "A QR code for an install link or any URL"],
+      ],
+      [
+        [null, "These make files from their inputs alone: no sign-in, and nothing is sent to BetaDrop."],
+        [
+          "betadrop_app_icons",
+          "**betadrop_app_icons inputs:** `imagePath` (required, PNG or JPEG), `platforms` (ios | android | both), " +
+            "`outputDir`, or `projectDir` to replace a project's own AppIcon.appiconset and launcher icons, `mode` (logo | full), `padding` (%), `backgroundColor`.",
+        ],
+        [
+          "betadrop_generate_plist",
+          "**betadrop_generate_plist inputs:** `kind` (exportOptions | manifest). exportOptions: `method`, `teamID`, `signingStyle`, `bundleId` + `provisioningProfile`, " +
+            "`provisioningProfiles`, `signingCertificate`, `destination`, `thinning`, `scheme`. manifest: `ipaUrl`, `bundleId`, `bundleVersion`, `title`, `manifestUrl`, image URLs." +
+            (remote ? "" : " `outputPath` saves the file."),
+        ],
+        ["betadrop_qr_code", `**betadrop_qr_code inputs:** \`url\` (required), \`size\` (px, default 512)${remote ? "" : ", `outputPath` (.png or .svg)"}.`],
+      ],
+      [
+        ["betadrop_app_icons", "Make app icons for iOS and Android from design/icon.png"],
+        ["betadrop_app_icons", "Put new app icons from logo.png into this Flutter project"],
+        ["betadrop_generate_plist", "Write an ExportOptions.plist for app-store-connect with team ABCDE12345"],
+        ["betadrop_generate_plist", "Make a manifest.plist for https://example.com/MyApp.ipa"],
+        ["betadrop_qr_code", "QR code for my latest install link"],
       ],
     ),
     // Environment variables configure the process this server runs in: the user's own over stdio,

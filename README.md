@@ -31,7 +31,7 @@ browser tab, no CLI, no leaving the editor.
 claude mcp add betadrop -s user -- npx -y @betadrop/mcp
 ```
 
-**28 tools. One npx command. No build step.** Your assistant already knows how to use them — you
+**35 tools. One npx command. No build step.** Your assistant already knows how to use them — you
 never type a tool name.
 
 ### Two ways to connect
@@ -41,7 +41,7 @@ never type a tool name.
 | **Runs** | On your computer, over stdio | On BetaDrop's servers, over Streamable HTTP |
 | **Sign-in** | An API token: `BETADROP_TOKEN`, or the config file that `betadrop_login` and the BetaDrop CLI write | Your BetaDrop account in the browser (OAuth) — no token to copy |
 | **Clients** | Any client that starts a local MCP server: Claude Code, Claude Desktop, Cursor, VS Code, Kiro, Windsurf, Zed, Antigravity | Any client that connects to a remote MCP server with OAuth sign-in: Claude, ChatGPT, Cursor, VS Code, Kiro, Claude Code |
-| **Tools** | 28 | 23 — all but the five that read or write files on your computer |
+| **Tools** | 35 | 28 — all but the seven that read or write files on your computer |
 | **Publishing** | A build file on disk, an upload link, or a public https link | An upload link you open in the browser, or a build already at a public https link |
 | **Needs** | Node.js 20 or newer | Nothing to install |
 
@@ -328,8 +328,8 @@ connector you keep using never asks you to sign in again. It shows up under **Se
 disconnect.
 
 **What it can't do.** It runs on BetaDrop's servers, so it cannot reach files on your computer:
-`betadrop_publish`, `betadrop_upload_status`, `betadrop_inspect`, `betadrop_login` and
-`betadrop_logout` are only in this package. A build you attach in the chat does not reach BetaDrop
+`betadrop_publish`, `betadrop_upload_status`, `betadrop_inspect`, `betadrop_convert_aab`,
+`betadrop_app_icons`, `betadrop_login` and `betadrop_logout` are only in this package. A build you attach in the chat does not reach BetaDrop
 either. To publish, the assistant uses one of two tools, then `betadrop_check_upload` for the
 install link:
 
@@ -338,9 +338,14 @@ install link:
 - **`betadrop_publish_from_url`** — for a build already at a public https link, such as a CI
   artifact or a GitHub release asset. BetaDrop downloads it.
 
-Nothing checks a build before it is published there (that is `betadrop_inspect`, which is local),
-but the publish result still says when a build will not install. The hosted connector sends no
-upload progress.
+Nothing checks a build file before it is published there (that is `betadrop_inspect`, which is
+local), but the publish result still says when a build will not install, and
+`betadrop_android_registration` checks a package name and signing certificate without a file. The
+hosted connector sends no upload progress.
+
+**What it logs.** The hosted connector writes one line per tool call: the tool name, whether it
+succeeded, how long it took, your account, the client's name and the protocol version. It never
+logs the arguments or the results. This package logs nothing.
 
 ---
 
@@ -385,6 +390,12 @@ You don't need to memorize any tool names — just talk to your AI assistant nat
 | Prompt | What Happens |
 |--------|--------------|
 | `"Will build/MyApp.ipa install from a link?"` | `betadrop_inspect` reads the profile and signing without publishing |
+| `"Is com.acme.app registered with Google for this signing key?"` | `betadrop_android_registration` checks the package name and certificate SHA-256 |
+| `"Convert app-release.aab to an APK I can publish"` | `betadrop_convert_aab` makes a universal `.apk` signed with a local test key |
+| `"Make app icons from logo.png and put them in my project"` | `betadrop_app_icons` writes the iOS and Android icon sets |
+| `"Put a QR code for this install link in qr.png"` | `betadrop_qr_code` makes the PNG |
+| `"Restore last month's expired build"` | `betadrop_restore_build`, when BetaDrop still has the file |
+| `"Put a password on this build's link"` | `betadrop_update_link` sets or removes a password, or a custom code |
 | `"Publish MyApp.ipa to the acme-beta standing link"` | Publishes and points the standing link testers already have at it |
 | `"What did testers say about the last build?"` | Reads tester feedback |
 | `"Export my test devices for the Apple portal"` | Returns the tab-separated devices file |
@@ -410,7 +421,7 @@ in the same reply.
 
 ## 📖 All Available Tools
 
-Twenty-eight tools across nine areas. The hosted connector has 23 of them: the five marked
+35 tools across ten areas. The hosted connector has 28 of them: the seven marked
 **Local only** read or write files on your computer. You never call these by name — the assistant
 picks them.
 
@@ -435,7 +446,9 @@ picks them.
 | `betadrop_publish_from_url` | Publish a build that is already online (a CI artifact, a GitHub release asset); BetaDrop downloads it |
 | `betadrop_check_upload` | The status of an upload link or URL publish, and the install link once it is live |
 
-Only `.ipa` and `.apk` files are accepted. An `.aab` is refused: testers need an `.apk`.
+Only `.ipa` and `.apk` files are accepted. An `.aab` is refused: testers need an `.apk`. To test an
+`.aab`, `betadrop_convert_aab` makes a universal `.apk` from it first (see
+[Release Checks](#release-checks)).
 
 **`betadrop_publish` parameters:**
 
@@ -495,7 +508,9 @@ Only `.ipa` and `.apk` files are accepted. An `.aab` is refused: testers need an
 | Tool | What It Does |
 |------|--------------|
 | `betadrop_list_builds` | List recent builds, with optional filters |
-| `betadrop_list_expired_builds` | List only expired builds (convenience shortcut) |
+| `betadrop_list_expired_builds` | List only expired builds (convenience shortcut). Builds BetaDrop retired while keeping their file are marked restorable |
+| `betadrop_restore_build` | Restore a build BetaDrop retired after it expired, while its file is still kept (`buildId`). It gets a fresh expiry from your current plan and counts toward your storage again; refused if that would pass the plan's storage limit or the file is gone |
+| `betadrop_update_link` | Set, change or remove the password on a build's install link, or give it a custom code (Pro and Studio). A new code replaces the old one, so the previous install URL stops working |
 | `betadrop_build_analytics` | Installs, unique devices, failed installs and why, a daily trend, the platform split, and top devices and countries for one build |
 | `betadrop_delete_build` | Delete a build (`buildId`); its install link stops working |
 | `betadrop_get_feedback` | The feedback testers left on a build (`buildId`): bug reports, ratings and notes |
@@ -518,7 +533,8 @@ Only `.ipa` and `.apk` files are accepted. An `.aab` is refused: testers need an
 | `perPage` | number | | Results per page (default: `20`, max: `100`) |
 
 Each listed build shows its ID, name, version, platform, file size, status, dates and install
-link, and `betadrop_list_builds` adds installs and devices. The ID is what `betadrop_delete_build`,
+link, and `betadrop_list_builds` adds installs and devices. Marking restorable builds needs the
+BetaDrop API release that adds it; until then the list shows no marks. The ID is what `betadrop_delete_build`,
 `betadrop_get_feedback` and `betadrop_point_standing_link` take.
 
 **`betadrop_build_analytics` parameters:**
@@ -528,20 +544,61 @@ link, and `betadrop_list_builds` adds installs and devices. The ID is what `beta
 | `build` | string | | The build's ID or short ID, or an app name (the newest build with that name). It matches names, not versions, among your 500 most recent builds. Omit for the most recent build |
 | `days` | number | | Length of the daily trend, 1–90 (default: `14`). The install, device and failure totals cover the build's whole life |
 
+**`betadrop_update_link` parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|:--------:|-------------|
+| `buildId` | string | ✅ | ID of the build whose link changes (from `betadrop_list_builds`) |
+| `password` | string | | New password for the link, at least 4 characters. It applies to everyone opening the link, including testers who unlocked it before |
+| `removePassword` | boolean | | `true` removes the password, so anyone with the link can open it |
+| `code` | string | | Custom code: 6–12 letters and numbers, giving `https://betadrop.app/install/?i=<code>`. Pro and Studio plans only |
+| `link` | string | | The current code or install URL of the link to change, for a build with more than one link. Without it, the build's main install link changes |
+
+Only the person who uploaded the build can change its link, and a password cannot be read back
+once set.
+
 ---
 
 ### Release Checks
 
 | Tool | What It Does |
 |------|--------------|
-| `betadrop_inspect` | **Local only.** Will an `.ipa`/`.apk` install from a link? Profile type and expiry, bundle ID match, signing, `testOnly`/`debuggable`. Nothing is published |
+| `betadrop_inspect` | **Local only.** Reads an `.ipa`, `.apk`, `.aab` or `.mobileprovision` on your computer without publishing it: the iOS provisioning profile (type, team, expiry, devices, bundle ID match); for Android, the signing schemes, certificate SHA-256, Google developer registration and 16 KB page size support (`.apk` and `.aab`); and for an `.aab`, its App Bundle details (SDK levels, modules, estimated download size). For an `.ipa` or `.apk` on a signed-in account, the file also goes to BetaDrop (not published) for the install-link verdict: profile, signing, `testOnly`/`debuggable` |
+| `betadrop_android_registration` | Whether an Android app is registered with Google's developer verification for a package name and signing certificate SHA-256: registered, not registered, or registered under a different key. Only those two values are sent; no file is needed |
+| `betadrop_convert_aab` | **Local only.** Convert an `.aab` into one universal `.apk` that installs from a link, signed with a reusable test key kept on your computer, not your upload or release key. It is for testing, not for Google Play. The result states the key's SHA-1 and SHA-256, and the `.apk` can be published with `betadrop_publish` |
+
+**`betadrop_convert_aab` parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|:--------:|-------------|
+| `filePath` | string | ✅ | Absolute path to the `.aab` |
+| `outputPath` | string | | Where to write the `.apk`. Default: next to the `.aab`, same name with `.apk` |
+| `overwrite` | boolean | | Replace an existing file at the output path (default `false`) |
+| `newTestKey` | boolean | | Sign with a newly made test key instead of this computer's existing one (default `false`). Testers then have to uninstall earlier converted APKs |
+
+### Generators
+
+Made from their inputs alone: no sign-in, and nothing is uploaded. They are the tools behind
+BetaDrop's free [App Icon Generator](https://betadrop.app/app-icon-generator/), plist generators and
+QR code generator.
+
+| Tool | What It Does |
+|------|--------------|
+| `betadrop_app_icons` | **Local only.** iOS and Android icon sets from one PNG or JPEG: the 1024 px iOS icon with no alpha channel, iOS 18 dark and tinted versions and `Contents.json`; Android launcher icons for every density with the adaptive icon XML and a themed layer; and the App Store and Google Play store icons. Written to a folder (`outputDir`) or straight into an Xcode, Android Studio, Flutter or React Native project (`projectDir`). The result lists the generator's checks and shows the icon |
+| `betadrop_generate_plist` | An iOS `ExportOptions.plist` (with the matching `xcodebuild` and fastlane commands) or an over-the-air `manifest.plist` (with its `itms-services://` install link). URLs are written into the plist, never fetched |
+| `betadrop_qr_code` | A QR code PNG for a link (error correction H, 2-module margin, black on white); `size` is 128–2048 px, default 512 |
+
+`betadrop_app_icons` takes `imagePath` (required), `platforms`, `outputDir`, `projectDir`, `mode`,
+`padding` and `backgroundColor`. `betadrop_generate_plist` takes `kind` (`exportOptions` or
+`manifest`, required) and the fields for that kind. On the local server, `betadrop_generate_plist`
+and `betadrop_qr_code` can also save the file with `outputPath`.
 
 ### Standing Links
 
 | Tool | What It Does |
 |------|--------------|
 | `betadrop_list_standing_links` | Standing links, the build each serves, and follower counts |
-| `betadrop_point_standing_link` | Point one (`slug`) at an already-uploaded build (`buildId`); followers are emailed |
+| `betadrop_point_standing_link` | Point one (`slug`) at an already-uploaded build (`buildId`); followers are emailed. Refused while the build is held for review or still being checked |
 
 `betadrop_publish` also accepts `standingLink`, and the two remote publishing tools `channel`, to
 point one at the new build as it goes live.
@@ -666,6 +723,33 @@ BETADROP_TOKEN=bd_live_xxx betadrop-mcp
 
 **The iOS build downloads on the phone but will not open?**
 - An ad-hoc `.ipa` only installs on devices that were in the provisioning profile when it was signed — publishing it does not change that. Send the tester the [UDID checker](https://betadrop.app/udid-checker/), add the device in the Apple Developer portal, and re-sign.
+
+---
+
+## 🆕 What's new in 0.5.0
+
+- **Seven more tools, 35 in all:** `betadrop_android_registration`, `betadrop_convert_aab`,
+  `betadrop_app_icons`, `betadrop_generate_plist`, `betadrop_qr_code`, `betadrop_restore_build` and
+  `betadrop_update_link`. The hosted connector has 28; `betadrop_convert_aab` and
+  `betadrop_app_icons` work on files on your computer, so they are local only.
+- **`betadrop_inspect` reads more.** Besides an `.ipa` or `.apk`, it reads an `.aab` and a
+  `.mobileprovision`: the provisioning profile, Android signing schemes and certificate SHA-256,
+  Google developer registration, 16 KB page size support (`.apk` and `.aab`) and App Bundle details.
+  For an `.ipa` or `.apk` on a signed-in account it adds BetaDrop's install-link verdict.
+- **Test an `.aab`:** `betadrop_convert_aab` makes a universal `.apk` signed with a reusable local
+  test key (not your upload or release key). Publishing still accepts only `.ipa` and `.apk`.
+- **`betadrop_app_icons`:** iOS and Android icon sets from one PNG or JPEG, into a folder or
+  straight into your project.
+- **`betadrop_generate_plist` and `betadrop_qr_code`:** an `ExportOptions.plist` or
+  `manifest.plist`, and a QR code PNG for a link.
+- **`betadrop_restore_build` and `betadrop_update_link`:** restore a build retired after it
+  expired while its file is kept, and set or remove a link password or set a custom link code (Pro
+  and Studio).
+- **`betadrop_list_expired_builds` marks builds that can be restored.** This needs the BetaDrop API
+  release that adds it; with an older API the list shows no marks.
+- **The hosted connector logs one line per tool call:** the tool name, success, duration, account,
+  client name and protocol version. It never logs arguments or results. The npm package logs
+  nothing.
 
 ---
 

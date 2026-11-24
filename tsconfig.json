@@ -4,7 +4,9 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
     ],
     "types": [
       "node"
@@ -15,7 +17,16 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "declaration": false
+    "declaration": false,
+    "paths": {
+      "@/*": [
+        "../src/*",
+        "./web-src/*"
+      ],
+      "jszip": [
+        "./node_modules/jszip"
+      ]
+    }
   },
   "include": [
     "src",

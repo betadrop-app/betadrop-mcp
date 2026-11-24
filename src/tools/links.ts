@@ -45,7 +45,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_point_standing_link",
       description:
-        "Point a standing link at an already-uploaded build. Testers who follow the link are emailed about the new build.",
+        "Point a standing link at an already-uploaded build. Testers who follow the link are emailed about the new build. Refused while that build is held for review or its safety check is still running; the link keeps serving the build it has.",
       inputSchema: {
         type: "object",
         properties: {

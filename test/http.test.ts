@@ -232,7 +232,7 @@ describe("remote connector over HTTP", () => {
     expect(initBody.result.serverInfo.name).toBe("betadrop");
 
     const list = (await (await rpc(base, GOOD, "tools/list")).json()) as { result: { tools: unknown[] } };
-    expect(list.result.tools).toHaveLength(23);
+    expect(list.result.tools).toHaveLength(28);
   });
 
   it("rate-limits per token with a Retry-After", async () => {
@@ -316,7 +316,7 @@ describe("the connector's own address", () => {
       body: { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
     });
     expect(list.status).toBe(200);
-    expect((JSON.parse(list.body) as { result: { tools: unknown[] } }).result.tools).toHaveLength(23);
+    expect((JSON.parse(list.body) as { result: { tools: unknown[] } }).result.tools).toHaveLength(28);
   });
 });
 

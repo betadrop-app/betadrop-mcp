@@ -1,4 +1,7 @@
 export class CliError extends Error {
+  /** The API's HTTP status, when this is its refusal: tells a plan gate (403) from a missing link (404). */
+  status?: number;
+
   constructor(
     message: string,
     public readonly exitCode = 1,

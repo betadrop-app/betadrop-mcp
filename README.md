@@ -12,6 +12,7 @@
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.betadrop--app%2Fbetadrop--mcp-0b64fc)](https://registry.modelcontextprotocol.io)
 [![Node](https://img.shields.io/node/v/@betadrop/mcp?color=0b64fc)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/npm/l/@betadrop/mcp?color=0b64fc)](https://opensource.org/licenses/MIT)
+[![betadrop-app/betadrop-mcp MCP server](https://glama.ai/mcp/servers/betadrop-app/betadrop-mcp/badges/score.svg)](https://glama.ai/mcp/servers/betadrop-app/betadrop-mcp)
 
 > **"Publish this build and send me the install link."**
 > Say that to your AI assistant and a tester can be installing the app thirty seconds later.

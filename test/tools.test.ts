@@ -133,9 +133,42 @@ describe("tool registry", () => {
     expect(text).toContain("Tool not found");
   });
 
-  it("tells the client to open with the welcome overview", async () => {
+  it("describes the welcome overview without telling the client to call it on every greeting", async () => {
     const client = await connect();
-    expect(client.getInstructions()).toContain("call betadrop_welcome first");
+    const instructions = client.getInstructions() ?? "";
+    expect(instructions).toContain("betadrop_welcome gives an overview");
+    // Claude's directory rejects descriptions that instruct the model to call tools, and a
+    // greeting trigger would fire in conversations that have nothing to do with BetaDrop.
+    expect(instructions).not.toMatch(/\b(call|use)\s+betadrop_/i);
+    expect(instructions).not.toMatch(/greets you|"hi"/i);
+  });
+
+  it("describes its tools rather than instructing the model", async () => {
+    // Claude's directory asks submitters to confirm that tool descriptions hold "no instructions
+    // about model behavior, other tools, or external instruction sources". Naming another tool
+    // as a fact ("betadrop_check_upload reports its status") is fine; telling the model what to
+    // do is not. Parameter descriptions count too.
+    const instructions = [
+      /\b(call|use|run|invoke|see)\s+(the\s+)?betadrop_/i,
+      /\b(call|use) this\b/i,
+      /\buse (it )?for\b/i,
+      /\bconfirm with\b/i,
+      /\bcopy it\b/i,
+      /\bmake sure\b/i,
+      /\b(you|claude|the model|the assistant) (must|should)\b/i,
+      // A greeting trigger would fire in conversations that have nothing to do with BetaDrop.
+      /greets you|"hi"|"hello"/i,
+    ];
+    for (const remote of [true, false]) {
+      const client = await connect(remote);
+      const { tools } = await client.listTools();
+      for (const t of tools) {
+        const params = (t.inputSchema as { properties?: Record<string, { description?: string }> }).properties ?? {};
+        const texts = [t.description ?? "", ...Object.values(params).map((p) => p.description ?? "")];
+        for (const text of texts) for (const pattern of instructions) expect(text, t.name).not.toMatch(pattern);
+      }
+      await client.close();
+    }
   });
 });
 

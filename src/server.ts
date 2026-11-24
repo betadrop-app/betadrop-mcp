@@ -17,11 +17,11 @@ export const VERSION = typeof __MCP_VERSION__ === "string" ? __MCP_VERSION__ : "
  */
 const SERVER_INSTRUCTIONS = `BetaDrop distributes iOS (.ipa) and Android (.apk) beta builds through over-the-air install links.
 
-When the user greets you (e.g. "hi", "hello"), asks what BetaDrop or this connector can do, or seems unsure where to start, call betadrop_welcome first and present its overview: keep its table and grouped suggestions, and end by offering one concrete next step based on their builds.
+betadrop_welcome gives an overview of the user's account, latest builds and what this connector can do, for when they ask what BetaDrop can do or are unsure where to start with it. Its table and grouped suggestions read best shown as they are, ending with one concrete next step based on their builds.
 
-To publish a build: with a local file path use betadrop_publish (local server only). Otherwise — including when the user attaches the .apk/.ipa in chat, which does not reach BetaDrop — call betadrop_create_upload_link and give them the link to drop the file on, or betadrop_publish_from_url when the build is already online. Then betadrop_check_upload returns the install link.
+Publishing a build: betadrop_publish (local server only) takes a file path. A file attached in chat does not reach BetaDrop, so betadrop_create_upload_link gives the user a link to drop the file on, and betadrop_publish_from_url takes a build that is already online. betadrop_check_upload reports the install link.
 
-Always show install links as full clickable URLs. When listing builds, prefer a compact table. Never ask the user for tool names; map their words to tools yourself.`;
+Install links are most useful as full clickable URLs, and build lists as a compact table. Users describe what they want in their own words rather than naming tools.`;
 
 function errorResult(text: string): CallToolResult {
   return { isError: true, content: [{ type: "text", text }] };

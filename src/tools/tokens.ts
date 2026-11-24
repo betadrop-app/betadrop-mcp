@@ -99,7 +99,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_token_create",
       description:
-        "Create a new CLI token. The plaintext token is shown exactly once — copy it immediately.",
+        "Create a new CLI token. The plaintext token appears in this reply only and can't be shown again.",
       inputSchema: {
         type: "object",
         properties: {

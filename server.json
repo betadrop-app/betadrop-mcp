@@ -1,10 +1,10 @@
 {
-  "$comment": "MCP Registry publish manifest. Schema fetched from https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json on 2026-09-03; that date is the current version at the time (pkg/model/constants.go CurrentSchemaVersion = 2025-12-11), and mcp-publisher rejects a deprecated one. Re-checked 2026-11-24: still the current version. Rules: `name` must equal `mcpName` in package.json and, under GitHub auth, must start with io.github.<org>; npm ownership is proven by that same mcpName field (docs/reference/server-json/official-registry-requirements.md); registryBaseUrl for npm may only be https://registry.npmjs.org. `version` here and packages[].version must match a version actually published on npm. `description` is capped at 100 characters by the schema. mcp-publisher parses this file with a plain json.Unmarshal into a struct, so this comment key is dropped locally and never reaches the registry. repository/ is PRESENT as of 2026-09-09: github.com/betadrop-app/betadrop-mcp was created public (MIT) on that date, so the field no longer publishes a 404. It stays optional in the schema (required = name, description, version). The io.github.betadrop-app namespace authenticates against the ORG, which also exists (betadrop-app/upload-action), so publishing would still work if the repo were ever removed — in that case delete this block again rather than leaving a dead link in the registry listing. remotes/ added 2026-11-24 for 0.4.0: the hosted connector (CONNECTOR.md), field names from the same schema (RemoteTransport = StreamableHttpTransport: type + url). It signs in with OAuth, so it carries no headers or variables. The registry checks the namespace, not who controls a remote URL, and a client may pick either the remote or the npm package (docs/modelcontextprotocol-io/remote-servers.mdx).",
+  "$comment": "MCP Registry publish manifest. Schema fetched from https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json on 2026-09-03; that date is the current version at the time (pkg/model/constants.go CurrentSchemaVersion = 2025-12-11), and mcp-publisher rejects a deprecated one. Re-checked 2026-11-24: still the current version. Rules: `name` must equal `mcpName` in package.json and, under GitHub auth, must start with io.github.<org>; npm ownership is proven by that same mcpName field (docs/reference/server-json/official-registry-requirements.md); registryBaseUrl for npm may only be https://registry.npmjs.org. `version` here and packages[].version must match a version actually published on npm. `description` is capped at 100 characters by the schema. mcp-publisher parses this file with a plain json.Unmarshal into a struct, so this comment key is dropped locally and never reaches the registry. repository/ is PRESENT as of 2026-09-09: github.com/betadrop-app/betadrop-mcp was created public (MIT) on that date, so the field no longer publishes a 404. It stays optional in the schema (required = name, description, version). The io.github.betadrop-app namespace authenticates against the ORG, which also exists (betadrop-app/upload-action), so publishing would still work if the repo were ever removed — in that case delete this block again rather than leaving a dead link in the registry listing. remotes/ added 2026-11-24 for 0.4.0: the hosted connector (CONNECTOR.md); its URL is https://mcp.betadrop.app from 0.4.1 (the 0.4.0 entry named https://api.betadrop.app/mcp, which still answers), field names from the same schema (RemoteTransport = StreamableHttpTransport: type + url). It signs in with OAuth, so it carries no headers or variables. The registry checks the namespace, not who controls a remote URL, and a client may pick either the remote or the npm package (docs/modelcontextprotocol-io/remote-servers.mdx).",
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.betadrop-app/betadrop-mcp",
   "title": "BetaDrop",
   "description": "Publish iOS and Android builds to testers and manage install links from an AI assistant.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "websiteUrl": "https://betadrop.app",
   "repository": {
     "url": "https://github.com/betadrop-app/betadrop-mcp",
@@ -13,7 +13,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://api.betadrop.app/mcp"
+      "url": "https://mcp.betadrop.app"
     }
   ],
   "packages": [
@@ -21,7 +21,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@betadrop/mcp",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

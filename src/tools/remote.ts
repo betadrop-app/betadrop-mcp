@@ -143,7 +143,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_create_upload_link",
       description:
-        "Create a one-time, 30-minute upload link the user opens in a browser to drop an .apk or .ipa, which then publishes to their BetaDrop account. Use this whenever the user wants to upload or publish a build and you cannot pass the file yourself — including when they attached the file in chat, since chat attachments do not reach BetaDrop. Then use betadrop_check_upload for the install link.",
+        "Create a one-time, 30-minute upload link the user opens in a browser to drop an .apk or .ipa, which then publishes to their BetaDrop account. It works for any build whose file can't be passed along directly, including one attached in chat, since chat attachments do not reach BetaDrop. Returns an upload ID; betadrop_check_upload reports its status and install link.",
       inputSchema: { type: "object", properties: OPTION_PROPERTIES },
     },
     {

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import type http from "node:http";
+import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -31,9 +31,47 @@ async function start(rateLimitPerMinute = 120, routes: Record<string, Route | ob
         ? { body: whoami }
         : { status: 401, body: { success: false } },
   });
-  mcp = createHttpServer(() => createServer(true), { publicUrl: "https://api.example.test", rateLimitPerMinute });
+  mcp = createHttpServer(() => createServer(true), {
+    publicUrl: "https://api.example.test",
+    connectorUrl: "https://mcp.example.test",
+    rateLimitPerMinute,
+  });
   await new Promise<void>((r) => mcp!.listen(0, "127.0.0.1", r));
   return `http://127.0.0.1:${(mcp.address() as AddressInfo).port}`;
+}
+
+/** A request as a client of `host` sends it, Host header included, which fetch can't set. */
+function hostRequest(
+  base: string,
+  host: string,
+  path: string,
+  init: { method?: string; token?: string; body?: unknown } = {},
+): Promise<{ status: number; headers: http.IncomingHttpHeaders; body: string }> {
+  const url = new URL(base);
+  const payload = init.body === undefined ? undefined : JSON.stringify(init.body);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path,
+        method: init.method ?? "GET",
+        headers: {
+          Host: host,
+          ...(payload ? { "Content-Type": "application/json", Accept: "application/json, text/event-stream" } : {}),
+          ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}),
+        },
+      },
+      (res) => {
+        let body = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => (body += chunk));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body }));
+      },
+    );
+    req.on("error", reject);
+    req.end(payload);
+  });
 }
 
 function rpc(base: string, token: string | null, method: string, params: unknown = {}, headers: Record<string, string> = {}) {
@@ -208,11 +246,77 @@ describe("remote connector over HTTP", () => {
     expect((await rpc(base, "bd_live_someone_else", "tools/list")).status).toBe(401);
   });
 
-  it("only serves POST /mcp and a health check", async () => {
+  it("on a host it doesn't know, only serves POST /mcp and a health check", async () => {
     const base = await start();
     expect((await fetch(`${base}/mcp`)).status).toBe(405);
+    expect((await fetch(`${base}/`, { method: "POST" })).status).toBe(404);
+    expect((await fetch(`${base}/.well-known/oauth-protected-resource`)).status).toBe(404);
     expect((await fetch(`${base}/other`)).status).toBe(404);
     expect(await (await fetch(`${base}/healthz`)).json()).toEqual({ ok: true });
+  });
+});
+
+describe("the connector's own address", () => {
+  const MCP = "mcp.example.test";
+  const initialize = { jsonrpc: "2.0", id: 1, method: "initialize", params: INIT };
+
+  it("answers at its root and at /mcp, each pointing at its own metadata", async () => {
+    const base = await start();
+    const signIn = async (host: string, path: string) => {
+      const res = await hostRequest(base, host, path, { method: "POST", body: initialize });
+      expect(res.status).toBe(401);
+      return res.headers["www-authenticate"];
+    };
+
+    expect(await signIn(MCP, "/")).toBe(
+      'Bearer resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource"',
+    );
+    expect(await signIn(MCP, "/mcp")).toBe(
+      'Bearer resource_metadata="https://mcp.example.test/.well-known/oauth-protected-resource/mcp"',
+    );
+    // The API host's address is unchanged, so connections made there carry on.
+    expect(await signIn("api.example.test", "/mcp")).toBe(
+      'Bearer resource_metadata="https://api.example.test/.well-known/oauth-protected-resource/mcp"',
+    );
+    // The root is an MCP endpoint only on the connector's own host.
+    expect((await hostRequest(base, "api.example.test", "/", { method: "POST", body: initialize })).status).toBe(404);
+    expect((await hostRequest(base, "evil.example", "/", { method: "POST", body: initialize })).status).toBe(404);
+  });
+
+  it("serves the metadata for its own address, naming the API as the authorization server", async () => {
+    const base = await start();
+    const root = await hostRequest(base, MCP, "/.well-known/oauth-protected-resource");
+    expect(root.status).toBe(200);
+    expect(root.headers["access-control-allow-origin"]).toBe("*");
+    expect(JSON.parse(root.body)).toEqual({
+      resource: "https://mcp.example.test",
+      authorization_servers: ["https://api.example.test"],
+      scopes_supported: ["read", "publish"],
+      bearer_methods_supported: ["header"],
+      resource_name: "BetaDrop",
+    });
+
+    const sub = await hostRequest(base, MCP, "/.well-known/oauth-protected-resource/mcp");
+    expect(JSON.parse(sub.body).resource).toBe("https://mcp.example.test/mcp");
+    // A Host header may carry the default port, or capitals.
+    const spelled = await hostRequest(base, "MCP.example.test:443", "/.well-known/oauth-protected-resource");
+    expect(JSON.parse(spelled.body).resource).toBe("https://mcp.example.test");
+    // None for an address that isn't ours, and nothing but reads.
+    expect((await hostRequest(base, "evil.example", "/.well-known/oauth-protected-resource")).status).toBe(404);
+    expect((await hostRequest(base, MCP, "/.well-known/oauth-protected-resource", { method: "POST" })).status).toBe(405);
+  });
+
+  it("serves the tools at its root with a valid token", async () => {
+    const base = await start();
+    const init = await hostRequest(base, MCP, "/", { method: "POST", token: GOOD, body: initialize });
+    expect(init.status).toBe(200);
+    const list = await hostRequest(base, MCP, "/", {
+      method: "POST",
+      token: GOOD,
+      body: { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+    });
+    expect(list.status).toBe(200);
+    expect((JSON.parse(list.body) as { result: { tools: unknown[] } }).result.tools).toHaveLength(23);
   });
 });
 

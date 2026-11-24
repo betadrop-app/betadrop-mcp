@@ -476,7 +476,7 @@ export const tools: ToolModule = {
           standingLink: {
             type: "string",
             description:
-              "Slug of a standing link to point at this build once it is live, so the one URL testers already have serves it. The slug must already be claimed on the account. See betadrop_list_standing_links.",
+              "Slug of a standing link to point at this build once it is live, so the one URL testers already have serves it. The slug must already be claimed on the account; betadrop_list_standing_links lists them.",
           },
         },
         required: ["filePath"],
@@ -487,7 +487,7 @@ export const tools: ToolModule = {
       // install link directly whenever it can, and says to call this when it cannot.
       name: "betadrop_upload_status",
       description:
-        "Get the result of the most recent betadrop_publish upload, including the install link. Call this only when betadrop_publish reported the upload was still running.",
+        "Get the result of the most recent betadrop_publish upload, including the install link, for an upload that betadrop_publish reported as still running.",
       inputSchema: { type: "object", properties: {} },
     },
     {
@@ -543,7 +543,7 @@ export const tools: ToolModule = {
     },
     {
       name: "betadrop_delete_build",
-      description: "Delete a build. Its install link stops working immediately. Confirm with the user first.",
+      description: "Delete a build. Its install link stops working immediately.",
       inputSchema: {
         type: "object",
         properties: { buildId: { type: "string", description: "ID of the build to delete (from betadrop_list_builds)." } },

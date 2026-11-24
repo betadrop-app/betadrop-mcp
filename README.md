@@ -36,7 +36,7 @@ never type a tool name.
 
 ### Two ways to connect
 
-| | This package (`npx -y @betadrop/mcp`) | Hosted connector (`https://api.betadrop.app/mcp`) |
+| | This package (`npx -y @betadrop/mcp`) | Hosted connector (`https://mcp.betadrop.app`) |
 |---|---|---|
 | **Runs** | On your computer, over stdio | On BetaDrop's servers, over Streamable HTTP |
 | **Sign-in** | An API token: `BETADROP_TOKEN`, or the config file that `betadrop_login` and the BetaDrop CLI write | Your BetaDrop account in the browser (OAuth) — no token to copy |
@@ -263,7 +263,7 @@ is nothing to do. For CI or a headless setup, set `BETADROP_TOKEN` instead — s
 BetaDrop also runs this server for you:
 
 ```
-https://api.betadrop.app/mcp
+https://mcp.betadrop.app
 ```
 
 Add that URL to a client that supports remote MCP servers, sign in to your BetaDrop account when it
@@ -272,9 +272,9 @@ opens the browser, and approve access. There is no token to copy and nothing to 
 | Client | How to add it |
 |---|---|
 | **Claude** (web, desktop, mobile) | A custom connector with the URL: **Customize → Connectors → Add → Add custom connector**. On Team and Enterprise plans an owner adds it under **Organization settings → Connectors** and each member clicks **Connect**. |
-| **Claude Code** | `claude mcp add --transport http betadrop https://api.betadrop.app/mcp`, then `/mcp` in Claude Code to sign in. Add `--scope user` to have it in every project. |
+| **Claude Code** | `claude mcp add --transport http betadrop https://mcp.betadrop.app`, then `/mcp` in Claude Code to sign in. Add `--scope user` to have it in every project. |
 | **ChatGPT** | A custom MCP server with the URL, in developer mode, signing in with OAuth. Which plans have it, and where, is up to OpenAI. |
-| **Cursor** | A `url` entry in `.cursor/mcp.json` (one project) or `~/.cursor/mcp.json` (every project): `{ "mcpServers": { "betadrop": { "url": "https://api.betadrop.app/mcp" } } }` |
+| **Cursor** | A `url` entry in `.cursor/mcp.json` (one project) or `~/.cursor/mcp.json` (every project): `{ "mcpServers": { "betadrop": { "url": "https://mcp.betadrop.app" } } }` |
 | **VS Code (Copilot)** | An MCP server of type HTTP with the URL. |
 | **Other clients** | Any client that speaks Streamable HTTP and the MCP authorization spec. |
 

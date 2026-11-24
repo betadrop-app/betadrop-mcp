@@ -149,7 +149,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_welcome",
       description:
-        "Personalized BetaDrop overview: the signed-in account, the latest builds with their install links, and what you can ask for next. Call this when the user greets you (\"hi\", \"hello\"), asks what BetaDrop can do, or seems unsure where to start.",
+        "Personalized BetaDrop overview: the signed-in account, the latest builds with their install links, and what you can ask for next. For when the user asks what BetaDrop can do or is unsure where to start.",
       inputSchema: { type: "object", properties: {} },
     },
   ],

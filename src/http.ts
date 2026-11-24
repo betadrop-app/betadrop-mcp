@@ -9,7 +9,9 @@ import { RateLimitedError, UnauthorizedError } from "./lib/errors.js";
 import { watchTokenRejection } from "./lib/tokenState.js";
 
 /**
- * Remote mode: the MCP Streamable HTTP transport, served at `/mcp` behind nginx on the API host.
+ * Remote mode: the MCP Streamable HTTP transport, behind nginx. It answers at the connector's own
+ * address (https://mcp.betadrop.app, at `/` and at `/mcp`) and at `/mcp` on the API host, where it
+ * first lived and where earlier connections still point.
  *
  * Stateless — every POST gets a fresh server, so any instance can answer any request and there is
  * no session map to leak. Both protocol eras are served from this one endpoint: 2026-07-28
@@ -24,8 +26,14 @@ import { watchTokenRejection } from "./lib/tokenState.js";
 
 const PORT = Number(process.env.MCP_HTTP_PORT || 8790);
 const HOST = process.env.MCP_HTTP_HOST || "127.0.0.1";
-/** The public origin the connector is reached at; the resource metadata lives under it. */
+/**
+ * The API host's public origin. Sign-in runs there (it is the authorization server), and the
+ * connector still answers at `/mcp` under it.
+ */
 const PUBLIC_URL = (process.env.MCP_PUBLIC_URL || "https://api.betadrop.app").replace(/\/$/, "");
+/** The connector's own address, the one we publish. It answers at its root and at `/mcp`. */
+const CONNECTOR_URL = (process.env.MCP_CONNECTOR_URL || "https://mcp.betadrop.app").replace(/\/$/, "");
+const WELL_KNOWN = "/.well-known/oauth-protected-resource";
 const MAX_BODY_BYTES = 1024 * 1024;
 /** Per-token budget: a burst of this many requests, refilled at the same number per minute. */
 const RATE_LIMIT_PER_MINUTE = Number(process.env.MCP_RATE_LIMIT_PER_MINUTE || 120);
@@ -40,6 +48,7 @@ const DEFAULT_ALLOWED_ORIGINS = ["https://claude.ai", "https://claude.com", "htt
 
 export interface HttpOptions {
   publicUrl?: string;
+  connectorUrl?: string;
   rateLimitPerMinute?: number;
   allowedOrigins?: string[];
   /** How long a token that passed the check is trusted; see {@link TOKEN_CHECK_TTL_MS}. */
@@ -82,6 +91,49 @@ export function clientAddress(peer: string | undefined, forwarded: string | stri
   const chain = Array.isArray(forwarded) ? forwarded.join(",") : (forwarded ?? "");
   const hop = chain.slice(chain.lastIndexOf(",") + 1).trim();
   return isIP(hop) ? hop : undefined;
+}
+
+/**
+ * The resources (RFC 9728) the connector serves, one for each address it answers at. A client
+ * checks that the metadata it is sent to names exactly the URL it connected to, so each address
+ * needs its own. The API host's comes first.
+ */
+export function connectorResources(publicUrl: string, connectorUrl: string): string[] {
+  return [`${publicUrl}/mcp`, connectorUrl, `${connectorUrl}/mcp`];
+}
+
+/**
+ * The resource a request is for, from the Host it was sent to (nginx passes the client's own) and
+ * its path, or undefined when that address is not one of `resources`.
+ */
+export function resourceFor(resources: readonly string[], host: string | undefined, path: string): string | undefined {
+  if (!host) return undefined;
+  const want = `${host.toLowerCase().replace(/:(443|80)$/, "")}${path}`;
+  return resources.find((r) => {
+    const url = new URL(r);
+    return `${url.host}${url.pathname}` === want;
+  });
+}
+
+/** Where a resource's metadata lives: the well-known path goes between its host and its path (RFC 9728, section 3.1). */
+export function resourceMetadataUrl(resource: string): string {
+  const url = new URL(resource);
+  return `${url.origin}${WELL_KNOWN}${url.pathname === "/" ? "" : url.pathname}`;
+}
+
+/**
+ * The protected-resource metadata for one of the connector's addresses. The API serves the same
+ * document for its own host (`protected_resource_metadata` in api/crates/api/src/handlers/oauth.rs);
+ * this one names the connector's address instead, so keep the two in step.
+ */
+export function resourceMetadata(resource: string, authorizationServer: string) {
+  return {
+    resource,
+    authorization_servers: [authorizationServer],
+    scopes_supported: ["read", "publish"],
+    bearer_methods_supported: ["header"],
+    resource_name: "BetaDrop",
+  };
 }
 
 /** sha256(token) — the only form a token is ever kept in, here. */
@@ -209,7 +261,8 @@ async function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
 /** The HTTP server, not yet listening. Exported for tests. */
 export function createHttpServer(createServer: () => Server, options: HttpOptions = {}): http.Server {
   const publicUrl = (options.publicUrl ?? PUBLIC_URL).replace(/\/$/, "");
-  const resourceMetadata = `${publicUrl}/.well-known/oauth-protected-resource/mcp`;
+  const connectorUrl = (options.connectorUrl ?? CONNECTOR_URL).replace(/\/$/, "");
+  const resources = connectorResources(publicUrl, connectorUrl);
   const limiter = new RateLimiter(options.rateLimitPerMinute ?? RATE_LIMIT_PER_MINUTE);
   const checks = new TokenChecks(options.tokenCheckTtlMs ?? TOKEN_CHECK_TTL_MS);
   const logError = (err: Error) => process.stderr.write(`[betadrop-mcp] Server error: ${err.message}\n`);
@@ -233,15 +286,18 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
     (await isLegacyRequest(await toWebRequest(req, body), body)) ? legacy(req, res, body) : modern(req, res, body);
   const extraOrigins = (process.env.MCP_ALLOWED_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean);
   const allowedOrigins = new Set(
-    [new URL(publicUrl).origin, ...(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS), ...extraOrigins].map((o) =>
-      o.replace(/\/$/, ""),
-    ),
+    [
+      new URL(publicUrl).origin,
+      new URL(connectorUrl).origin,
+      ...(options.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS),
+      ...extraOrigins,
+    ].map((o) => o.replace(/\/$/, "")),
   );
 
   let warnedNoAddress = false;
 
-  const unauthorized = (res: http.ServerResponse, error?: "invalid_token") => {
-    const params = [`resource_metadata="${resourceMetadata}"`];
+  const unauthorized = (res: http.ServerResponse, resource: string, error?: "invalid_token") => {
+    const params = [`resource_metadata="${resourceMetadataUrl(resource)}"`];
     if (error) params.push(`error="${error}"`);
     sendJson(
       res,
@@ -257,7 +313,25 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
     if (path === "/healthz") {
       return sendJson(res, 200, { ok: true });
     }
-    if (path !== "/mcp") {
+    // The metadata for the connector's own address. nginx sends the API host's to the API, which
+    // serves its own; an address this server doesn't answer at has none.
+    if (path === WELL_KNOWN || path === `${WELL_KNOWN}/mcp`) {
+      const resource = resourceFor(resources, req.headers.host, path.slice(WELL_KNOWN.length) || "/");
+      if (!resource) return sendJson(res, 404, { error: "not_found" });
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        return sendJson(res, 405, { error: "method_not_allowed" }, { Allow: "GET, HEAD" });
+      }
+      return sendJson(res, 200, resourceMetadata(resource, publicUrl), { "Access-Control-Allow-Origin": "*" });
+    }
+    // `/mcp` answers on any host, as it always has: one that matches none of ours (a local run)
+    // gets the API host's resource. `/` answers only at an address whose root is ours.
+    const resource =
+      path === "/mcp"
+        ? (resourceFor(resources, req.headers.host, path) ?? resources[0])
+        : path === "/"
+          ? resourceFor(resources, req.headers.host, path)
+          : undefined;
+    if (!resource) {
       return sendJson(res, 404, { error: "not_found" });
     }
     if (!originAllowed(req.headers.origin, allowedOrigins)) {
@@ -276,7 +350,7 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
 
     const auth = req.headers.authorization ?? "";
     const token = /^Bearer\s+(.+)$/i.exec(auth)?.[1]?.trim();
-    if (!token) return unauthorized(res);
+    if (!token) return unauthorized(res, resource);
 
     // Before the token check, so a flood of junk tokens cannot turn into a flood of API calls.
     const key = tokenKey(token);
@@ -289,7 +363,7 @@ export function createHttpServer(createServer: () => Server, options: HttpOption
         { "Retry-After": String(wait) },
       );
     }
-    if (!(await checks.valid(token, key))) return unauthorized(res, "invalid_token");
+    if (!(await checks.valid(token, key))) return unauthorized(res, resource, "invalid_token");
 
     let body: unknown;
     try {
@@ -334,7 +408,7 @@ export async function startHttp(createServer: () => Server): Promise<void> {
     httpServer.once("error", reject);
     httpServer.listen(PORT, HOST, resolve);
   });
-  process.stderr.write(`[betadrop-mcp] Listening on http://${HOST}:${PORT}/mcp (public ${PUBLIC_URL}/mcp)\n`);
+  process.stderr.write(`[betadrop-mcp] Listening on http://${HOST}:${PORT} (public ${CONNECTOR_URL} and ${PUBLIC_URL}/mcp)\n`);
 
   // A restart (deploy, systemd) stops taking new requests and lets the in-flight ones finish, so a
   // tool call that was mid-answer is not cut off.

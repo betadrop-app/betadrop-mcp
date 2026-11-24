@@ -124,7 +124,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_build_analytics",
       description:
-        "Install analytics for one build: installs, unique devices, failed installs and why, a daily trend, iOS/Android split, top device models and countries. Use for questions like \"how is my latest build doing?\" or \"which countries and devices installed ShopEase?\". Installs carry no tester names, so it cannot say who installed a build.",
+        "Install analytics for one build: installs, unique devices, failed installs and why, a daily trend, iOS/Android split, top device models and countries. It answers questions like \"how is my latest build doing?\" or \"which countries and devices installed ShopEase?\". Installs carry no tester names, so it cannot say who installed a build.",
       inputSchema: {
         type: "object",
         properties: {

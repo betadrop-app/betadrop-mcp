@@ -6,7 +6,7 @@ const { version } = JSON.parse(readFileSync("./package.json", "utf8")) as { vers
 export default defineConfig({
   entry: { index: "src/index.ts" },
   format: ["esm"],
-  target: "node18",
+  target: "node20",
   clean: true,
   minify: true,
   // Bake the package version in at build time so the server reports a single

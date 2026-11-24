@@ -40,9 +40,18 @@ interface UploadArgs {
    * (default 30 000 ms = 30s).
    */
   connectTimeoutMs?: number;
-  /** How many times to retry on a transient 5xx before giving up (default 2). */
+  /**
+   * How many times to retry an upload the API cannot have received in full (default 2). Never
+   * after an HTTP response, a 5xx included: see the retry loop in {@link uploadBuild}.
+   */
   retries?: number;
 }
+
+/**
+ * The upload failed before the API could have accepted it: no response came back, and the request
+ * body had not all been handed to the network. The only failure {@link uploadBuild} retries.
+ */
+class NotDelivered extends CliError {}
 
 const CRLF = "\r\n";
 
@@ -113,18 +122,23 @@ export async function uploadBuild<T = PublishResponse>(args: UploadArgs): Promis
   const client = isHttps ? https : http;
   const agent = isHttps ? httpsAgent : httpAgent;
 
+  // Retry only an upload the API cannot have accepted.
+  //
+  // A publish is not idempotent. Once the API has the whole body it stores the build, and a 502 or
+  // 504 from the proxy in front of it can still arrive after that, so re-sending on a 5xx published
+  // the same build twice, with two install links. Any HTTP response is therefore final, and so is a
+  // connection that fails after the last byte left: the API may be storing the build right then.
+  //
+  // What is retried is a failure before the body finished sending, with no response: a refused or
+  // reset connection, a stale keep-alive socket, our own connect timeout, a stall mid-body. The API
+  // publishes only a complete multipart body, so it cannot have stored one of those.
   let attempt = 0;
   while (true) {
     attempt++;
     try {
       return await attemptUpload();
     } catch (err) {
-      if (
-        err instanceof CliError &&
-        !(err instanceof UnauthorizedError) &&
-        /HTTP 5\d\d/.test(err.message) &&
-        attempt - 1 < retries
-      ) {
+      if (err instanceof NotDelivered && attempt - 1 < retries) {
         process.stderr.write(
           `[betadrop-mcp] Upload attempt ${attempt} failed, retrying...\n`,
         );
@@ -137,6 +151,10 @@ export async function uploadBuild<T = PublishResponse>(args: UploadArgs): Promis
 
   function attemptUpload(): Promise<T> {
     return new Promise<T>((resolve, reject) => {
+      // What the retry rule above reads: whether the API answered, and whether every byte of the
+      // body was handed to the network ('finish'). Before 'finish' the API cannot have it all.
+      let responded = false;
+      let bodySent = false;
       const req = client.request(
         url,
         {
@@ -153,6 +171,7 @@ export async function uploadBuild<T = PublishResponse>(args: UploadArgs): Promis
           },
         },
         (res: http.IncomingMessage) => {
+          responded = true;
           const chunks: Buffer[] = [];
           res.on("data", (c: Buffer) => chunks.push(c));
           res.on("end", () => {
@@ -192,6 +211,9 @@ export async function uploadBuild<T = PublishResponse>(args: UploadArgs): Promis
       let stallTimer: ReturnType<typeof setTimeout> | null = null;
       const resetStall = () => {
         if (stallTimer) clearTimeout(stallTimer);
+        // An answer can come before the file finishes streaming (an early refusal); the stall
+        // timer stopped then, and the last chunks must not start it again.
+        if (responded) return;
         stallTimer = setTimeout(() => {
           fileStream.destroy();
           req.destroy(
@@ -212,23 +234,30 @@ export async function uploadBuild<T = PublishResponse>(args: UploadArgs): Promis
       }, connectTimeoutMs);
 
       req.on("socket", (socket: import("node:net").Socket) => {
-        socket.on("connect", () => {
+        const connected = () => {
           clearTimeout(connectTimer);
           resetStall();
-        });
+        };
+        // A keep-alive socket from the agent's pool (say, after betadrop_inspect) is connected
+        // already and never emits 'connect'; waiting for it let the connect timer cut the upload
+        // off at connectTimeoutMs.
+        if (socket.connecting) socket.once("connect", connected);
+        else connected();
+      });
+
+      req.on("finish", () => {
+        bodySent = true;
       });
 
       req.on("error", (err: Error) => {
         if (stallTimer) clearTimeout(stallTimer);
         clearTimeout(connectTimer);
         fileStream.destroy();
-        reject(
+        const message =
           err.message.includes("stalled") || err.message.includes("connect")
-            ? new CliError(err.message)
-            : new CliError(
-                `Could not reach BetaDrop at ${baseUrl}. Check your connection or the BETADROP_API_URL environment variable.`,
-              ),
-        );
+            ? err.message
+            : `Could not reach BetaDrop at ${baseUrl}. Check your connection or the BETADROP_API_URL environment variable.`;
+        reject(!responded && !bodySent ? new NotDelivered(message) : new CliError(message));
       });
 
       req.write(preamble);

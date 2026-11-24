@@ -1,7 +1,8 @@
 import http from "node:http";
 import https from "node:https";
-import { getToken, readConfig, resolveApiUrl } from "./config.js";
-import { CliError, UnauthorizedError } from "./errors.js";
+import { getClientAddress, getToken, readConfig, resolveApiUrl } from "./config.js";
+import { CliError, RateLimitedError, UnauthorizedError } from "./errors.js";
+import { noteTokenRejected } from "./tokenState.js";
 import type { ApiResponse } from "../types.js";
 
 // Reuse TCP connections across tool calls within the same session.
@@ -49,6 +50,15 @@ export async function apiFetch<T = unknown>(
 
   const headers: Record<string, string> = { Accept: "application/json" };
 
+  // Remote mode calls the API over loopback, so without this the API takes every connector user
+  // for 127.0.0.1. It believes this header because the peer is loopback, the same as from nginx
+  // (`throttle_ip_from_headers`). The only forwarding header sent: the API ranks CF-Connecting-IP
+  // above it, so passing that one on from the inbound request would let a client pick its address.
+  const clientAddress = getClientAddress();
+  if (clientAddress) {
+    headers["X-Forwarded-For"] = clientAddress;
+  }
+
   if (auth) {
     const activeToken = token ?? (await getToken());
     if (!activeToken) {
@@ -90,7 +100,12 @@ export async function apiFetch<T = unknown>(
   }
 
   if (response.status === 401) {
+    noteTokenRejected();
     throw new UnauthorizedError();
+  }
+  if (response.status === 429) {
+    const after = Number(response.headers.get("retry-after"));
+    throw new RateLimitedError(Number.isFinite(after) && after > 0 ? Math.ceil(after) : 60);
   }
 
   let json: ApiResponse<T>;

@@ -392,7 +392,7 @@ picks them.
 
 | Tool | What It Does |
 |------|--------------|
-| `betadrop_publish` | **Local only.** Upload an `.ipa` or `.apk` from disk and get a shareable install link |
+| `betadrop_publish` | **Local only.** Upload an `.ipa` or `.apk` from disk as a new build with its own install link; earlier builds keep theirs. The standing link named in `standingLink` moves to the new build even when it is held for review. Without one, standing links set to follow the app move to it, unless the file is identical to a build still live on the account or the new build is held for review or otherwise can't be installed. Confirmed followers of a moved link get one email about 30 minutes after its last move, if the build it serves then can be installed |
 | `betadrop_upload_status` | **Local only.** The result (install link) of the most recent `betadrop_publish` upload. Takes no parameters — the assistant calls it when a large build outruns the 90-second publish window |
 | `betadrop_create_upload_link` | A one-time link, valid for 30 minutes, where you drop an `.apk` or `.ipa` in a browser — for Claude, ChatGPT and other clients whose chat attachments cannot reach BetaDrop |
 | `betadrop_publish_from_url` | Publish a build that is already online (a CI artifact, a GitHub release asset); BetaDrop downloads it |
@@ -414,7 +414,7 @@ Only `.ipa` and `.apk` files are accepted. An `.aab` is refused: testers need an
 | `expiryTimeDays` | number | | Expire after N days (use with `time` or `combined`). Clamped to your plan's maximum build retention |
 | `expiryDownloadLimit` | number | | Expire after N downloads (use with `downloads` or `combined`) |
 | `expiryDeviceLimit` | number | | Expire after N unique devices (use with `devices` or `combined`) |
-| `standingLink` | string | | Slug of a [standing link](https://betadrop.app/standing-links/) to point at this build once it is live (must already be claimed on the account) |
+| `standingLink` | string | | Slug of a [standing link](https://betadrop.app/standing-links/) to point at this build once it is stored (must already be claimed on the account) |
 
 **`betadrop_create_upload_link` and `betadrop_publish_from_url` parameters:**
 
@@ -524,7 +524,7 @@ point one at the new build as it goes live.
 | `betadrop_list_webhooks` | Webhooks on the account |
 | `betadrop_create_webhook` | Send events to a URL, Slack or Discord (`format` is detected from the URL). A JSON webhook's signing secret is shown once |
 | `betadrop_test_webhook` | Deliver a test event now and report the answer |
-| `betadrop_delete_webhook` | Remove a webhook |
+| `betadrop_delete_webhook` | Delete a webhook permanently: its URL gets no more events from that moment, and its queued deliveries and delivery log go with it. A webhook re-created for the same URL gets a new ID and signing secret. On a team, only owners and admins can delete one |
 
 Events: `build.published`, `standing_link.updated`, `build.expiring`, `build.file_missing` and
 `tester.installed`. A new webhook gets all of them except `tester.installed` unless you name them.
@@ -536,8 +536,8 @@ Events: `build.published`, `standing_link.updated`, `build.expiring`, `build.fil
 | Tool | What It Does |
 |------|--------------|
 | `betadrop_token_list` | List all your active (non-revoked) API tokens |
-| `betadrop_token_create` | Create a new scoped token (plaintext shown only once!) |
-| `betadrop_token_delete` | Permanently revoke a token by ID |
+| `betadrop_token_create` | Create a token in the same workspace (personal or team) as the token making the call, which needs the `publish` ability; an account can hold 20 unrevoked tokens per workspace. The plaintext is shown only once and is not stored |
+| `betadrop_token_delete` | Revoke a token by ID, at once and for good. Every CI job, script, CLI or MCP server signed in with it is refused the next time it calls the BetaDrop API, and a connector whose token is revoked (named like "Claude (connector)") has to sign in again |
 
 **`betadrop_token_create` parameters:**
 

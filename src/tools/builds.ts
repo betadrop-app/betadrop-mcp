@@ -428,7 +428,8 @@ export const tools: ToolModule = {
   definitions: [
     {
       name: "betadrop_publish",
-      description: "Publish an iOS (.ipa) or Android (.apk) build to BetaDrop.",
+      description:
+        "Publish an iOS (.ipa) or Android (.apk) file from this computer as a new build with its own install link; earlier builds keep theirs. The standing link named in standingLink moves to the new build even when it is held for review. Without one, standing links set to follow this app move to it, unless the file is identical to a build still live on the account or the new build is held for review or otherwise can't be installed. Confirmed followers of a moved link get one email about 30 minutes after its last move, if the build it serves then can be installed. The reply gives the install link and build ID; an upload still running after 90 seconds continues in the background, and betadrop_upload_status reports its result.",
       inputSchema: {
         type: "object",
         properties: {
@@ -476,7 +477,7 @@ export const tools: ToolModule = {
           standingLink: {
             type: "string",
             description:
-              "Slug of a standing link to point at this build once it is live, so the one URL testers already have serves it. The slug must already be claimed on the account; betadrop_list_standing_links lists them.",
+              "Slug of a standing link to point at this build once it is stored, so the one URL testers already have serves it. The slug must already be claimed on the account; betadrop_list_standing_links lists them.",
           },
         },
         required: ["filePath"],

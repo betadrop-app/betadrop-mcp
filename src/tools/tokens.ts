@@ -99,7 +99,7 @@ export const tools: ToolModule = {
     {
       name: "betadrop_token_create",
       description:
-        "Create a new CLI token. The plaintext token appears in this reply only and can't be shown again.",
+        "Create an API token for CI jobs, scripts and other API clients, in the same workspace (personal or team) as the token making the call, which needs the publish ability. An account can hold 20 unrevoked tokens per workspace. The reply gives the new token's ID, abilities, expiry date and plaintext value, which is not stored and can't be shown again.",
       inputSchema: {
         type: "object",
         properties: {
@@ -122,7 +122,8 @@ export const tools: ToolModule = {
     },
     {
       name: "betadrop_token_delete",
-      description: "Revoke a CLI token by its ID.",
+      description:
+        "Revoke an API token. It stops working at once and can't be restored: every CI job, script, CLI or MCP server signed in with it is refused the next time it calls the BetaDrop API. A revoked connector token, named like \"Claude (connector)\", can't be refreshed either, so that connector has to sign in again.",
       inputSchema: {
         type: "object",
         properties: {

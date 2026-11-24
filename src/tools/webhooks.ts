@@ -109,10 +109,11 @@ export const tools: ToolModule = {
     },
     {
       name: "betadrop_delete_webhook",
-      description: "Delete a webhook.",
+      description:
+        "Delete a webhook permanently. BetaDrop stops sending events to its URL at once, and its queued deliveries and delivery log are deleted with it; a webhook re-created for the same URL gets a new ID and signing secret. In a team workspace only owners and admins can delete one.",
       inputSchema: {
         type: "object",
-        properties: { webhookId: { type: "string", description: "Webhook ID." } },
+        properties: { webhookId: { type: "string", description: "ID of the webhook to delete (from betadrop_list_webhooks)." } },
         required: ["webhookId"],
       },
     },

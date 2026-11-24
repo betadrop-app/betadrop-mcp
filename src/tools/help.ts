@@ -61,7 +61,7 @@ function reference(remote: boolean): string {
     section(
       "Publishing builds",
       [
-        ["betadrop_publish", "Upload an .ipa or .apk from this computer"],
+        ["betadrop_publish", "Upload an .ipa or .apk from this computer as a new build with its own install link"],
         ["betadrop_upload_status", "The result of a betadrop_publish that was still uploading"],
         ["betadrop_create_upload_link", "A one-time link the user opens in a browser to drop an .ipa or .apk on"],
         ["betadrop_publish_from_url", "Publish an .ipa or .apk that is already online"],
@@ -200,8 +200,8 @@ function reference(remote: boolean): string {
       "API tokens",
       [
         ["betadrop_token_list", "List all active API tokens"],
-        ["betadrop_token_create", "Create a new API token (shown once)"],
-        ["betadrop_token_delete", "Revoke a token by ID"],
+        ["betadrop_token_create", "Create an API token in the calling token's workspace (value shown once)"],
+        ["betadrop_token_delete", "Revoke a token by ID, at once and for good"],
       ],
       [
         [
@@ -225,7 +225,7 @@ function reference(remote: boolean): string {
         ["betadrop_list_webhooks", "Webhooks on the account"],
         ["betadrop_create_webhook", "Send events to a URL, Slack or Discord"],
         ["betadrop_test_webhook", "Send a test event now"],
-        ["betadrop_delete_webhook", "Delete a webhook"],
+        ["betadrop_delete_webhook", "Delete a webhook for good; its URL gets no more events"],
       ],
       [
         [

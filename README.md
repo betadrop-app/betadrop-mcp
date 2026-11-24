@@ -23,7 +23,7 @@ review wait, no Play track, no tester accounts. If you have used Diawi or Fireba
 it does the same job.
 
 **BetaDrop MCP** moves that step to the other side of your AI assistant. Claude, ChatGPT, Cursor,
-Copilot, Windsurf, Zed and Antigravity can publish builds, check they will install, manage
+Copilot, Kiro, Windsurf, Zed and Antigravity can publish builds, check they will install, manage
 standing links, devices and webhooks, and read tester feedback through ordinary prompts — no
 browser tab, no CLI, no leaving the editor.
 
@@ -40,13 +40,28 @@ never type a tool name.
 |---|---|---|
 | **Runs** | On your computer, over stdio | On BetaDrop's servers, over Streamable HTTP |
 | **Sign-in** | An API token: `BETADROP_TOKEN`, or the config file that `betadrop_login` and the BetaDrop CLI write | Your BetaDrop account in the browser (OAuth) — no token to copy |
-| **Clients** | Any client that starts a local MCP server: Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed, Antigravity | Any client that connects to a remote MCP server with OAuth sign-in: Claude, ChatGPT, Cursor, VS Code, Claude Code |
+| **Clients** | Any client that starts a local MCP server: Claude Code, Claude Desktop, Cursor, VS Code, Kiro, Windsurf, Zed, Antigravity | Any client that connects to a remote MCP server with OAuth sign-in: Claude, ChatGPT, Cursor, VS Code, Kiro, Claude Code |
 | **Tools** | 28 | 23 — all but the five that read or write files on your computer |
 | **Publishing** | A build file on disk, an upload link, or a public https link | An upload link you open in the browser, or a build already at a public https link |
 | **Needs** | Node.js 20 or newer | Nothing to install |
 
 The [Quick Start](#-quick-start-3-steps) below sets up this package. For the hosted connector, see
 [Hosted connector](#-hosted-connector-no-install).
+
+### One-click install
+
+**Hosted connector** (`https://mcp.betadrop.app`). You sign in to BetaDrop in the browser:
+
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=betadrop&config=eyJ1cmwiOiJodHRwczovL21jcC5iZXRhZHJvcC5hcHAifQ%3D%3D)
+[![Install in VS Code](https://img.shields.io/badge/-Install_in_VS_Code-0098FF?style=for-the-badge)](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522betadrop%2522%252C%2522type%2522%253A%2522http%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fmcp.betadrop.app%2522%257D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=betadrop&config=%7B%22url%22%3A%22https%3A%2F%2Fmcp.betadrop.app%22%7D)
+
+**This package** (`npx -y @betadrop/mcp`, added as `betadrop-local`). Log in afterwards as in
+[Step 3](#step-3--first-time-setup):
+
+[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=betadrop-local&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsIkBiZXRhZHJvcC9tY3AiXX0%3D)
+[![Install in VS Code](https://img.shields.io/badge/-Install_in_VS_Code-0098FF?style=for-the-badge)](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522betadrop-local%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522%2540betadrop%252Fmcp%2522%255D%257D)
+[![Add to Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=betadrop-local&config=%7B%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22%40betadrop%2Fmcp%22%5D%7D)
 
 ---
 
@@ -72,7 +87,8 @@ The [Quick Start](#-quick-start-3-steps) below sets up this package. For the hos
 >
 > The AI will automatically locate, create, or update the configuration file for you. Once it is done, simply refresh/restart your editor.
 
-Otherwise, pick your editor below to configure it manually.
+Otherwise, use a [one-click install](#one-click-install) button for Cursor, VS Code or Kiro, or
+pick your editor below to configure it manually.
 
 
 <details>
@@ -242,6 +258,25 @@ Restart Antigravity to pick up the new server.
 
 </details>
 
+<details>
+<summary><strong>Kiro</strong></summary>
+
+Create `.kiro/settings/mcp.json` in your project root, or edit `~/.kiro/settings/mcp.json` for
+every project:
+
+```json
+{
+  "mcpServers": {
+    "betadrop": {
+      "command": "npx",
+      "args": ["-y", "@betadrop/mcp"]
+    }
+  }
+}
+```
+
+</details>
+
 ### Step 3 — First-Time Setup
 
 After adding the MCP server, authenticate with your BetaDrop API token. Open your AI assistant and type:
@@ -274,11 +309,13 @@ opens the browser, and approve access. There is no token to copy and nothing to 
 | **Claude** (web, desktop, mobile) | A custom connector with the URL: **Customize → Connectors → Add → Add custom connector**. On Team and Enterprise plans an owner adds it under **Organization settings → Connectors** and each member clicks **Connect**. |
 | **Claude Code** | `claude mcp add --transport http betadrop https://mcp.betadrop.app`, then `/mcp` in Claude Code to sign in. Add `--scope user` to have it in every project. |
 | **ChatGPT** | A custom MCP server with the URL, in developer mode, signing in with OAuth. Which plans have it, and where, is up to OpenAI. |
-| **Cursor** | A `url` entry in `.cursor/mcp.json` (one project) or `~/.cursor/mcp.json` (every project): `{ "mcpServers": { "betadrop": { "url": "https://mcp.betadrop.app" } } }` |
-| **VS Code (Copilot)** | An MCP server of type HTTP with the URL. |
+| **Cursor** | A `url` entry in `.cursor/mcp.json` (one project) or `~/.cursor/mcp.json` (every project): `{ "mcpServers": { "betadrop": { "url": "https://mcp.betadrop.app" } } }`, or the **Add to Cursor** button under [One-click install](#one-click-install). |
+| **VS Code (Copilot)** | An MCP server of type HTTP with the URL, or the **Install in VS Code** button under [One-click install](#one-click-install). |
+| **Kiro** | A `url` entry in `.kiro/settings/mcp.json` (one project) or `~/.kiro/settings/mcp.json` (every project): `{ "mcpServers": { "betadrop": { "url": "https://mcp.betadrop.app" } } }`, or the **Add to Kiro** button under [One-click install](#one-click-install). |
 | **Other clients** | Any client that speaks Streamable HTTP and the MCP authorization spec. |
 
-Menu names move; the paths above are from each vendor's documentation on 2026-11-24.
+Menu names move; the paths above are from each vendor's documentation on 2026-11-24 (Kiro's on
+2026-11-25).
 
 **How sign-in works.** OAuth 2.1 with PKCE: the client registers itself (dynamic client
 registration) and sends you to BetaDrop, where you sign in and approve or deny the access it asks
@@ -664,9 +701,27 @@ The same publish step, on the other two surfaces — one account, one set of API
 
 ---
 
+## 🔒 Privacy and support
+
+- **Privacy policy:** <https://betadrop.app/privacy/>. Its "AI Assistant Connections" section
+  covers this package and the hosted connector. What a tool returns goes to the assistant you
+  chose, under that provider's own terms and privacy policy. BetaDrop does not receive your
+  conversations with the assistant, only the requests it sends and what they contain, such as
+  release notes you ask it to add.
+- **Your sign-in:** this package keeps its token in a config file on your computer (see
+  [Step 3](#step-3--first-time-setup)). The hosted connector's sign-in is an access token that
+  BetaDrop stores only as a hash. Revoke either under **Settings → Developer → API tokens**.
+- **Support:** email <support@betadrop.app>, or open an issue at
+  <https://github.com/betadrop-app/betadrop-mcp/issues>.
+- **Security:** report vulnerabilities to <security@betadrop.app>
+  ([security.txt](https://betadrop.app/.well-known/security.txt)).
+
+---
+
 ## 📚 Links
 
 - [BetaDrop](https://betadrop.app) — the build distribution platform
+- [MCP docs](https://betadrop.app/docs/mcp/) — setup for each client, and the hosted connector
 - [Model Context Protocol](https://modelcontextprotocol.io) — the open standard powering this integration
 - [Report an Issue](https://betadrop.app/feedback/)
 
@@ -676,8 +731,8 @@ The same publish step, on the other two surfaces — one account, one set of API
 - A [BetaDrop](https://betadrop.app) account — the free tier needs no card. Retention and
   file-size ceilings by plan are on the [pricing page](https://betadrop.app/pricing/).
 - An MCP client: one that starts a local server for this package (Claude Code, Claude Desktop,
-  Cursor, VS Code, Windsurf, Zed, Antigravity), or one that connects to a remote server for the
-  hosted connector (Claude, ChatGPT, Cursor, VS Code, Claude Code)
+  Cursor, VS Code, Kiro, Windsurf, Zed, Antigravity), or one that connects to a remote server for
+  the hosted connector (Claude, ChatGPT, Cursor, VS Code, Kiro, Claude Code)
 
 ## Contributing
 

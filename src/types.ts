@@ -230,6 +230,8 @@ export interface InspectReport {
   platform: "ios" | "android";
   installableFromLink: boolean;
   checks: Array<{ id: string; level: "error" | "warning" | "ok"; message: string }>;
+  /** Store readiness and security findings (gap 4). Absent on older servers. */
+  findings?: Array<{ id: string; category: string; level: "error" | "warning" | "info"; masvs: string | null; message: string }>;
   app: { name: string | null; bundleId: string | null; version: string | null; buildNumber: string | null };
   ios: {
     profile: {
@@ -261,6 +263,8 @@ export interface Webhook {
   active: boolean;
   disabledReason: string | null;
   lastSuccessAt: string | null;
+  /** Only these apps (bundle ids); `null` = every app. */
+  bundleIds?: string[] | null;
 }
 
 /** `GET /api/cli/stats` — account-wide totals for the welcome overview. */

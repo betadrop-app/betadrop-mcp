@@ -40,6 +40,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   betadrop_list_expired_builds: read("List expired builds"),
   betadrop_delete_build: destructive("Delete a build", { idempotentHint: true }),
   betadrop_get_feedback: read("Read tester feedback"),
+  betadrop_set_feedback_status: write("Change a feedback report's status", { idempotentHint: true }),
+  betadrop_send_feedback_to_tracker: write("Send feedback to Linear or Jira", { idempotentHint: true, openWorldHint: true }),
   // Brings a build back rather than removing anything, so not destructive; a second call on a
   // restored build changes nothing, so idempotent. Its link only works again: nothing outside
   // BetaDrop is contacted.
@@ -75,8 +77,20 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
   betadrop_list_webhooks: read("List webhooks"),
   betadrop_create_webhook: write("Create a webhook", { openWorldHint: true }),
+  // Destructive because the events list and app filter it sends replace the stored ones.
+  betadrop_update_webhook: destructive("Edit a webhook", { idempotentHint: true }),
   betadrop_test_webhook: write("Send a test webhook event", { openWorldHint: true }),
   betadrop_delete_webhook: destructive("Delete a webhook", { idempotentHint: true }),
+
+  betadrop_list_apps: read("List apps"),
+  // Stops every share link and standing link of the app working: it takes away access people had.
+  betadrop_set_app_private: destructive("Make an app testers only", { idempotentHint: true }),
+  betadrop_list_tester_groups: read("List tester groups"),
+  betadrop_create_tester_group: write("Create a tester group"),
+  betadrop_list_testers: read("List testers and their install status"),
+  betadrop_invite_testers: write("Invite testers by email", { openWorldHint: true }),
+  betadrop_remind_testers: write("Remind testers who are behind", { openWorldHint: true }),
+  betadrop_remove_tester: destructive("Remove a tester from a group", { idempotentHint: true }),
 
   // Generators: they make files from their inputs and never call the BetaDrop API.
   betadrop_app_icons: destructive("Make app icon sets", { idempotentHint: true }),

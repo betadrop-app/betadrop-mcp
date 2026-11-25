@@ -3,6 +3,17 @@ import { apiFetch } from "../lib/api.js";
 import type { Webhook } from "../types.js";
 import type { ToolHandler, ToolModule } from "./types.js";
 
+/** Every event a webhook can listen to; the catalogue in api/crates/api/src/webhooks.rs is the source. */
+const EVENTS = [
+  "build.published",
+  "standing_link.updated",
+  "build.expiring",
+  "build.file_missing",
+  "tester.installed",
+  "feedback.received",
+  "feedback.status_changed",
+];
+
 const listWebhooks: ToolHandler = async () => {
   const res = await apiFetch<{ webhooks: Webhook[] }>("/api/webhooks");
   const hooks = res.data?.webhooks ?? [];
@@ -44,6 +55,42 @@ const createWebhook: ToolHandler = async (args) => {
   };
 };
 
+const updateWebhook: ToolHandler = async (args) => {
+  const { webhookId, events, bundleIds, description, active } = args as {
+    webhookId: string;
+    events?: string[];
+    bundleIds?: string[];
+    description?: string;
+    active?: boolean;
+  };
+  // Only the fields the assistant passed are sent, because the PATCH keeps everything else as
+  // stored. An empty bundleIds list goes as null, which is how the API spells "every app".
+  const body: Record<string, unknown> = {
+    ...(events ? { events } : {}),
+    ...(bundleIds ? { bundleIds: bundleIds.length ? bundleIds : null } : {}),
+    ...(description !== undefined ? { description } : {}),
+    ...(active !== undefined ? { active } : {}),
+  };
+  if (Object.keys(body).length === 0) {
+    return {
+      content: [{ type: "text", text: "Nothing to change: pass events, bundleIds, description or active." }],
+      isError: true,
+    };
+  }
+  const res = await apiFetch<Webhook>(`/api/webhooks/${encodeURIComponent(webhookId)}`, { method: "PATCH", body });
+  const w = res.data!;
+  return {
+    content: [
+      {
+        type: "text",
+        text:
+          `Webhook updated [${w.id}] — ${w.active ? "on" : "off"}.\n  Events: ${w.events.join(", ")}` +
+          `\n  Apps: ${w.bundleIds?.length ? w.bundleIds.join(", ") : "every app"}`,
+      },
+    ],
+  };
+};
+
 const testWebhook: ToolHandler = async (args) => {
   const { webhookId } = args as { webhookId: string };
   const res = await apiFetch<{ ok: boolean; statusCode: number | null; error: string | null; durationMs: number }>(
@@ -74,28 +121,56 @@ export const tools: ToolModule = {
   definitions: [
     {
       name: "betadrop_list_webhooks",
-      description: "List webhooks that send build events to the user's systems, Slack or Discord.",
+      description:
+        "List webhooks that send build and feedback events to the user's systems, Slack, Discord or Microsoft Teams.",
       inputSchema: { type: "object", properties: {} },
     },
     {
       name: "betadrop_create_webhook",
       description:
-        "Send build events to a URL. Slack and Discord webhook URLs are detected and formatted as chat messages. Events: build.published, standing_link.updated, build.expiring, build.file_missing, tester.installed.",
+        "Send build and feedback events to a URL. Slack and Discord webhook URLs are detected and formatted as chat messages; so are Microsoft Teams (Workflows) URLs once the Teams format is switched on for the server, and until then a Teams URL is refused with format_unavailable. Events: build.published, standing_link.updated, build.expiring, build.file_missing, tester.installed, feedback.received, feedback.status_changed.",
       inputSchema: {
         type: "object",
         properties: {
-          url: { type: "string", description: "https URL, or a Slack/Discord incoming webhook URL." },
+          url: {
+            type: "string",
+            description: "https URL, or a Slack, Discord or Microsoft Teams (Workflows) webhook URL. Teams needs the format switched on for the server.",
+          },
           events: {
             type: "array",
             items: {
               type: "string",
-              enum: ["build.published", "standing_link.updated", "build.expiring", "build.file_missing", "tester.installed"],
+              enum: EVENTS,
             },
-            description: "Events to send. Defaults to everything except tester.installed.",
+            description: "Events to send. Defaults to everything except tester.installed and feedback.status_changed.",
           },
-          format: { type: "string", enum: ["json", "slack", "discord"], description: "Omit to detect from the URL." },
+          format: { type: "string", enum: ["json", "slack", "discord", "teams"], description: "Omit to detect from the URL." },
         },
         required: ["url"],
+      },
+    },
+    {
+      name: "betadrop_update_webhook",
+      description:
+        "Change which events and apps a webhook covers, its description, or switch it on or off. Fields left out keep their stored value. The events list given replaces the endpoint's stored list.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          webhookId: { type: "string", description: "Webhook ID." },
+          events: {
+            type: "array",
+            items: { type: "string", enum: EVENTS },
+            description: "The full list of events to send.",
+          },
+          bundleIds: {
+            type: "array",
+            items: { type: "string" },
+            description: "Only send events about these apps (bundle ids or package names). An empty list means every app.",
+          },
+          description: { type: "string", description: "A note on what receives the events. Empty clears it." },
+          active: { type: "boolean", description: "Switch the webhook on (true) or off (false)." },
+        },
+        required: ["webhookId"],
       },
     },
     {
@@ -121,6 +196,7 @@ export const tools: ToolModule = {
   handlers: {
     betadrop_list_webhooks: listWebhooks,
     betadrop_create_webhook: createWebhook,
+    betadrop_update_webhook: updateWebhook,
     betadrop_test_webhook: testWebhook,
     betadrop_delete_webhook: deleteWebhook,
   },

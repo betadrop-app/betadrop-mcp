@@ -426,10 +426,43 @@ const getFeedback: ToolHandler = async (args) => {
   const text = items
     .map(
       (f) =>
-        `• ${f.title || f.feedback_type} — ${f.reporter_name || f.reporter_email || "anonymous"}${f.rating ? ` · ${f.rating}/5` : ""} · ${f.created_at ?? ""}\n  ${String(f.description ?? "").replace(/\n/g, "\n  ")}`,
+        `• [${f.id}] ${f.title || f.feedback_type} — ${f.reporter_name || f.reporter_email || "anonymous"}${f.rating ? ` · ${f.rating}/5` : ""}${f.status && f.status !== "new" ? ` · ${String(f.status).replace("_", " ")}` : ""} · ${f.created_at ?? ""}\n  ${String(f.description ?? "").replace(/\n/g, "\n  ")}`,
     )
     .join("\n\n");
   return { content: [{ type: "text", text: `${items.length} report(s):\n\n${text}` }] };
+};
+
+const FEEDBACK_STATUSES = ["new", "in_progress", "resolved", "closed"];
+
+const setFeedbackStatus: ToolHandler = async (args) => {
+  const { buildId, feedbackId, status } = args as { buildId: string; feedbackId: string; status: string };
+  const res = await apiFetch<Record<string, string | null>>(
+    `/api/builds/${encodeURIComponent(buildId)}/feedback/${encodeURIComponent(feedbackId)}`,
+    { method: "PATCH", body: { status } },
+  );
+  return {
+    content: [
+      {
+        type: "text",
+        text: `Report ${feedbackId} is now ${String(res.data?.status ?? status).replace("_", " ")}. Any linked Linear or Jira issue is updated to match.`,
+      },
+    ],
+  };
+};
+
+const sendFeedbackToTracker: ToolHandler = async (args) => {
+  const { buildId, feedbackId, provider } = args as { buildId: string; feedbackId: string; provider?: string };
+  const res = await apiFetch<{ issue?: { provider: string; key: string; url: string }; created?: boolean; queued?: boolean; message?: string }>(
+    `/api/builds/${encodeURIComponent(buildId)}/feedback/${encodeURIComponent(feedbackId)}/issue`,
+    { method: "POST", body: provider ? { provider } : {} },
+  );
+  const d = res.data ?? {};
+  const text = d.issue
+    ? `${d.created === false ? "Already linked to" : "Created"} ${d.issue.key}: ${d.issue.url}`
+    : d.queued
+      ? `Queued — ${d.message ?? "it will be retried shortly"}.`
+      : "Sent.";
+  return { content: [{ type: "text", text }] };
 };
 
 export const tools: ToolModule = {
@@ -568,6 +601,34 @@ export const tools: ToolModule = {
         required: ["buildId"],
       },
     },
+    {
+      name: "betadrop_set_feedback_status",
+      description:
+        "Move a tester's feedback report to another status (new, in_progress, resolved, closed). A linked Linear or Jira issue is moved to match. Report ids come from betadrop_get_feedback.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          buildId: { type: "string", description: "Build ID." },
+          feedbackId: { type: "string", description: "Feedback report ID." },
+          status: { type: "string", enum: FEEDBACK_STATUSES, description: "The new status." },
+        },
+        required: ["buildId", "feedbackId", "status"],
+      },
+    },
+    {
+      name: "betadrop_send_feedback_to_tracker",
+      description:
+        "Create a Linear or Jira issue from a tester's feedback report, using the integration connected in BetaDrop (Settings → Integrations). Sending a report twice links the same issue.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          buildId: { type: "string", description: "Build ID." },
+          feedbackId: { type: "string", description: "Feedback report ID." },
+          provider: { type: "string", enum: ["linear", "jira"], description: "Omit to use whichever tracker is connected." },
+        },
+        required: ["buildId", "feedbackId"],
+      },
+    },
   ],
   handlers: {
     betadrop_publish: publish,
@@ -576,5 +637,7 @@ export const tools: ToolModule = {
     betadrop_list_expired_builds: listExpiredBuilds,
     betadrop_delete_build: deleteBuild,
     betadrop_get_feedback: getFeedback,
+    betadrop_set_feedback_status: setFeedbackStatus,
+    betadrop_send_feedback_to_tracker: sendFeedbackToTracker,
   },
 };

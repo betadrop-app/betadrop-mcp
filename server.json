@@ -4,7 +4,7 @@
   "name": "io.github.betadrop-app/betadrop-mcp",
   "title": "BetaDrop",
   "description": "Publish iOS and Android builds to testers and manage install links from an AI assistant.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "websiteUrl": "https://betadrop.app",
   "repository": {
     "url": "https://github.com/betadrop-app/betadrop-mcp",
@@ -21,7 +21,7 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@betadrop/mcp",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "runtimeHint": "npx",
       "transport": {
         "type": "stdio"

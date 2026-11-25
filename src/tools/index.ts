@@ -12,11 +12,12 @@ import { tools as tokens } from "./tokens.js";
 import { tools as links } from "./links.js";
 import { tools as devices } from "./devices.js";
 import { tools as webhooks } from "./webhooks.js";
+import { tools as testers } from "./testers.js";
 import { tools as generators } from "./generators.js";
 import { tools as help } from "./help.js";
 
 /** Every area, in the order `tools/list` shows them. */
-const MODULES: ToolModule[] = [start, auth, builds, manage, remote, analytics, checks, tokens, links, devices, webhooks, generators, help];
+const MODULES: ToolModule[] = [start, auth, builds, manage, remote, analytics, checks, tokens, links, devices, webhooks, testers, generators, help];
 
 export const TOOL_DEFINITIONS: Tool[] = MODULES.flatMap((m) => m.definitions).map((t) => ({
   ...t,

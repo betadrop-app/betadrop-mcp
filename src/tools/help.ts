@@ -70,8 +70,9 @@ function reference(remote: boolean): string {
       [
         [
           null,
-          "BetaDrop takes .ipa (iOS) and .apk (Android) files. App bundles (.aab) can't be installed from a link, so build a universal .apk instead.",
+          "These tools publish .ipa (iOS) and .apk (Android) files. An app bundle (.aab) can't be installed from a link: a server with .aab uploads switched on converts one uploaded from the dashboard, and anywhere else a universal .apk is what testers need.",
         ],
+        ["betadrop_convert_aab", "betadrop_convert_aab makes that universal .apk from a bundle on this computer."],
         [
           "betadrop_publish",
           "**betadrop_publish inputs:**\n" +
@@ -125,6 +126,8 @@ function reference(remote: boolean): string {
         ["betadrop_list_expired_builds", "Expired builds only"],
         ["betadrop_build_analytics", "Installs, devices, countries and failed installs for one build"],
         ["betadrop_get_feedback", "Feedback testers left on a build"],
+        ["betadrop_set_feedback_status", "Move a report to new, in progress, resolved or closed"],
+        ["betadrop_send_feedback_to_tracker", "Create a Linear or Jira issue from a report"],
         ["betadrop_delete_build", "Delete a build (its link stops working)"],
         ["betadrop_restore_build", "Bring back a build retired after it expired, while its file is kept (uses storage again)"],
         ["betadrop_update_link", "Set or remove a build link's password, or give it a custom code (Pro and Studio)"],
@@ -262,19 +265,44 @@ function reference(remote: boolean): string {
       "Webhooks",
       [
         ["betadrop_list_webhooks", "Webhooks on the account"],
-        ["betadrop_create_webhook", "Send events to a URL, Slack or Discord"],
+        ["betadrop_create_webhook", "Send events to a URL, Slack, Discord, or Microsoft Teams once it is switched on for the server"],
+        ["betadrop_update_webhook", "Change a webhook's events, apps or description, or switch it on or off"],
         ["betadrop_test_webhook", "Send a test event now"],
         ["betadrop_delete_webhook", "Delete a webhook for good; its URL gets no more events"],
       ],
       [
         [
           "betadrop_create_webhook",
-          "Events: build.published, standing_link.updated, build.expiring, build.file_missing, tester.installed.",
+          "Events: build.published, standing_link.updated, build.expiring, build.file_missing, tester.installed, feedback.received, feedback.status_changed.",
         ],
       ],
       [
         ["betadrop_create_webhook", "Post new BetaDrop builds to this Slack webhook: https://hooks.slack.com/services/…"],
         ["betadrop_test_webhook", "Test my BetaDrop webhook"],
+        ["betadrop_update_webhook", "Only send feedback.received from my Slack webhook, and only for com.acme.app"],
+      ],
+    ),
+    section(
+      "Apps and testers (Pro and Studio)",
+      [
+        ["betadrop_list_apps", "Builds grouped by bundle ID, with what each platform serves"],
+        ["betadrop_set_app_private", "Testers only: install from invited testers' personal links alone"],
+        ["betadrop_list_tester_groups", "Tester groups and the app each follows"],
+        ["betadrop_create_tester_group", "A group that gets every new build of an app"],
+        ["betadrop_list_testers", "Who is behind, who is up to date"],
+        ["betadrop_invite_testers", "Invite people by email (they confirm first)"],
+        ["betadrop_remind_testers", "Email everyone not on the newest build (once a day)"],
+        ["betadrop_remove_tester", "Take someone out of a group"],
+      ],
+      [
+        [
+          "betadrop_list_tester_groups",
+          "Tester groups are switched on per BetaDrop server. Where they are off, betadrop_list_apps still lists apps and betadrop_set_app_private can still make an app public; the other tools here answer that tester groups are not available.",
+        ],
+      ],
+      [
+        ["betadrop_create_tester_group", "Make a BetaDrop tester group for my Shop app and invite ann@example.com and bob@example.com"],
+        ["betadrop_remind_testers", "Which of my testers are still on an old build? Remind them."],
       ],
     ),
     section(

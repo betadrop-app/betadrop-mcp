@@ -96,11 +96,11 @@ describe("tool registry", () => {
     const remote = await (await connect(true)).listTools();
     const names = local.tools.map((t) => t.name);
 
-    expect(names).toHaveLength(35);
+    expect(names).toHaveLength(46);
     expect(new Set(names).size).toBe(names.length);
     expect(names[0]).toBe("betadrop_welcome");
     expect(remote.tools.map((t) => t.name)).not.toEqual(expect.arrayContaining(["betadrop_publish"]));
-    expect(remote.tools).toHaveLength(28);
+    expect(remote.tools).toHaveLength(39);
   });
 
   it("gives every tool the title and hints the connector directory requires", async () => {
@@ -244,7 +244,7 @@ describe("betadrop_help", () => {
     for (const t of tools) expect(mentions(text, t.name), t.name).toBe(true);
     expect(text).toContain("BETADROP_TOKEN");
     // What the publish API accepts: .ipa and .apk only.
-    expect(text).toContain("App bundles (.aab) can't be installed from a link");
+    expect(text).toContain("An app bundle (.aab) can't be installed from a link");
   });
 
   it("shows the hosted connector only the tools it has, and no environment variables", async () => {
@@ -715,5 +715,139 @@ describe("remote publishing", () => {
     });
     const { text } = await call(await connect(true), "betadrop_check_upload", { id: "u-3" });
     expect(text).toContain("has not been used yet");
+  });
+});
+
+describe("betadrop_update_webhook", () => {
+  const hook = { id: "wh-1", url: "https://hooks.slack.com/x", format: "slack", active: true, disabledReason: null, lastSuccessAt: null };
+
+  /** A PATCH route that records the body it was sent. */
+  function patchRoute(answer: object) {
+    const sent: { method?: string; body?: unknown } = {};
+    const route = (req: import("node:http").IncomingMessage) => {
+      sent.method = req.method;
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => (sent.body = JSON.parse(raw)));
+      return { body: ok(answer) };
+    };
+    return { sent, route };
+  }
+
+  it("sends only the fields given, with an empty app list as every app", async () => {
+    const { sent, route } = patchRoute({ ...hook, events: ["feedback.received"], bundleIds: null });
+    api = await fakeApi({ "/api/webhooks/wh-1": route });
+    const { text, isError } = await call(await connect(true), "betadrop_update_webhook", {
+      webhookId: "wh-1",
+      events: ["feedback.received"],
+      bundleIds: [],
+    });
+    expect(isError).toBe(false);
+    expect(text).toContain("Events: feedback.received");
+    expect(text).toContain("Apps: every app");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sent.method).toBe("PATCH");
+    expect(sent.body).toEqual({ events: ["feedback.received"], bundleIds: null });
+  });
+
+  it("passes an app filter and description through and reports the filter", async () => {
+    const { sent, route } = patchRoute({ ...hook, events: ["build.published"], bundleIds: ["com.acme.app"] });
+    api = await fakeApi({ "/api/webhooks/wh-1": route });
+    const { text } = await call(await connect(), "betadrop_update_webhook", {
+      webhookId: "wh-1",
+      bundleIds: ["com.acme.app"],
+      description: "",
+    });
+    expect(text).toContain("Apps: com.acme.app");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sent.body).toEqual({ bundleIds: ["com.acme.app"], description: "" });
+  });
+
+  it("refuses a call with nothing to change instead of sending an empty PATCH", async () => {
+    api = await fakeApi({});
+    const { text, isError } = await call(await connect(), "betadrop_update_webhook", { webhookId: "wh-1" });
+    expect(isError).toBe(true);
+    expect(text).toContain("Nothing to change");
+    expect(api.seen).toHaveLength(0);
+  });
+});
+
+describe("tester tools", () => {
+  it("lists a group's testers with where each one is, and counts who is behind", async () => {
+    api = await fakeApi({
+      "/api/tester-groups/g1": ok({
+        group: { id: "g1", name: "Beta crew", appId: "a1", appBundleId: "com.shop", members: 3, active: 2 },
+        testers: [
+          { id: "t1", email: "ann@example.com", install: { status: "up_to_date", lastInstalled: { version: "1.2", buildNumber: "12" } } },
+          { id: "t2", email: "bob@example.com", install: { status: "behind", lastInstalled: { version: "1.0", buildNumber: null } } },
+          { id: "t3", email: "cat@example.com", install: { status: "invited", lastInstalled: null } },
+        ],
+      }),
+    });
+    const { text, isError } = await call(await connect(), "betadrop_list_testers", { groupId: "g1" });
+    expect(isError).toBe(false);
+    expect(text).toContain("3 testers, 1 not on the newest build");
+    expect(text).toContain("bob@example.com — on an older build, has 1.0");
+    expect(text).toContain("cat@example.com — invited, not confirmed yet");
+  });
+
+  it("invites by POSTing the addresses and reports what happened to each kind", async () => {
+    api = await fakeApi({
+      "/api/tester-groups/g1/testers": ok({ invited: 1, alreadyInvited: 1, alreadyActive: 0, invalid: ["nope"] }),
+    });
+    const { text } = await call(await connect(), "betadrop_invite_testers", {
+      groupId: "g1",
+      emails: ["ann@example.com", "bob@example.com", "nope"],
+    });
+    expect(api.seen.at(-1)?.method).toBe("POST");
+    expect(text).toContain("1 invited");
+    expect(text).toContain("1 were already invited");
+    expect(text).toContain("Not valid addresses: nope");
+  });
+
+  it("says when tester groups are switched off on the server, in one line", async () => {
+    api = await fakeApi({
+      "/api/tester-groups": () => ({
+        status: 404,
+        body: { success: false, error: "Tester groups are not available.", reason: "testers_disabled" },
+      }),
+    });
+    const { text, isError } = await call(await connect(), "betadrop_list_tester_groups", {});
+    expect(isError).toBe(true);
+    expect(text).toContain("Tester groups are not available.");
+  });
+
+  it("passes on the daily invitation cap's own words, not a retry-later", async () => {
+    api = await fakeApi({
+      "/api/tester-groups/g1/testers": () => ({
+        status: 429,
+        body: { success: false, error: "You can invite 3 more people today.", reason: "invite_limit" },
+      }),
+    });
+    const { text, isError } = await call(await connect(), "betadrop_invite_testers", {
+      groupId: "g1",
+      emails: ["ann@example.com"],
+    });
+    expect(isError).toBe(true);
+    expect(text).toContain("You can invite 3 more people today.");
+    expect(text).not.toContain("Try again in");
+  });
+
+  it("lists addresses that unsubscribed, which were not invited", async () => {
+    api = await fakeApi({
+      "/api/tester-groups/g1/testers": ok({
+        invited: 0, alreadyInvited: 0, alreadyActive: 0, invalid: [], unsubscribed: ["ann@example.com"],
+      }),
+    });
+    const { text } = await call(await connect(), "betadrop_invite_testers", { groupId: "g1", emails: ["ann@example.com"] });
+    expect(text).toContain("they unsubscribed: ann@example.com");
+  });
+
+  it("marks making an app private as destructive: it switches its share links off", async () => {
+    const { tools } = await (await connect(false)).listTools();
+    const byName = Object.fromEntries(tools.map((t) => [t.name, t.annotations]));
+    expect(byName.betadrop_set_app_private?.destructiveHint).toBe(true);
+    expect(byName.betadrop_invite_testers?.openWorldHint).toBe(true);
+    expect(byName.betadrop_list_testers?.readOnlyHint).toBe(true);
   });
 });

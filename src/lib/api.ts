@@ -104,6 +104,15 @@ export async function apiFetch<T = unknown>(
     throw new UnauthorizedError();
   }
   if (response.status === 429) {
+    // A daily cap the API states in words (the tester invitation cap) is not "too many requests
+    // right now": waiting a minute changes nothing, so its own message is passed on.
+    const capped = (await response
+      .clone()
+      .json()
+      .catch(() => null)) as { reason?: string; error?: string } | null;
+    if ((capped?.reason === "invite_limit" || capped?.reason === "resend_limit") && capped.error) {
+      throw new CliError(capped.error);
+    }
     const after = Number(response.headers.get("retry-after"));
     throw new RateLimitedError(Number.isFinite(after) && after > 0 ? Math.ceil(after) : 60);
   }

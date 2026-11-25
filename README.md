@@ -31,7 +31,7 @@ browser tab, no CLI, no leaving the editor.
 claude mcp add betadrop -s user -- npx -y @betadrop/mcp
 ```
 
-**35 tools. One npx command. No build step.** Your assistant already knows how to use them — you
+**46 tools. One npx command. No build step.** Your assistant already knows how to use them — you
 never type a tool name.
 
 ### Two ways to connect
@@ -41,7 +41,7 @@ never type a tool name.
 | **Runs** | On your computer, over stdio | On BetaDrop's servers, over Streamable HTTP |
 | **Sign-in** | An API token: `BETADROP_TOKEN`, or the config file that `betadrop_login` and the BetaDrop CLI write | Your BetaDrop account in the browser (OAuth) — no token to copy |
 | **Clients** | Any client that starts a local MCP server: Claude Code, Claude Desktop, Cursor, VS Code, Kiro, Windsurf, Zed, Antigravity | Any client that connects to a remote MCP server with OAuth sign-in: Claude, ChatGPT, Cursor, VS Code, Kiro, Claude Code |
-| **Tools** | 35 | 28 — all but the seven that read or write files on your computer |
+| **Tools** | 46 | 39 — all but the seven that read or write files on your computer |
 | **Publishing** | A build file on disk, an upload link, or a public https link | An upload link you open in the browser, or a build already at a public https link |
 | **Needs** | Node.js 20 or newer | Nothing to install |
 
@@ -421,7 +421,7 @@ in the same reply.
 
 ## 📖 All Available Tools
 
-35 tools across ten areas. The hosted connector has 28 of them: the seven marked
+46 tools across eleven areas. The hosted connector has 39 of them: the seven marked
 **Local only** read or write files on your computer. You never call these by name — the assistant
 picks them.
 
@@ -514,6 +514,8 @@ Only `.ipa` and `.apk` files are accepted. An `.aab` is refused: testers need an
 | `betadrop_build_analytics` | Installs, unique devices, failed installs and why, a daily trend, the platform split, and top devices and countries for one build |
 | `betadrop_delete_build` | Delete a build (`buildId`); its install link stops working |
 | `betadrop_get_feedback` | The feedback testers left on a build (`buildId`): bug reports, ratings and notes |
+| `betadrop_set_feedback_status` | Move a report to new, in progress, resolved or closed (a linked Linear or Jira issue follows) |
+| `betadrop_send_feedback_to_tracker` | Create a Linear or Jira issue from a report, where integrations are switched on |
 
 **`betadrop_list_builds` parameters:**
 
@@ -616,12 +618,14 @@ point one at the new build as it goes live.
 | Tool | What It Does |
 |------|--------------|
 | `betadrop_list_webhooks` | Webhooks on the account |
-| `betadrop_create_webhook` | Send events to a URL, Slack or Discord (`format` is detected from the URL). A JSON webhook's signing secret is shown once |
+| `betadrop_create_webhook` | Send events to a URL, Slack, Discord, or Microsoft Teams once it is switched on for the server (`format` is detected from the URL). A JSON webhook's signing secret is shown once |
+| `betadrop_update_webhook` | Change a webhook's events, apps or description, or switch it on or off |
 | `betadrop_test_webhook` | Deliver a test event now and report the answer |
 | `betadrop_delete_webhook` | Delete a webhook permanently: its URL gets no more events from that moment, and its queued deliveries and delivery log go with it. A webhook re-created for the same URL gets a new ID and signing secret. On a team, only owners and admins can delete one |
 
-Events: `build.published`, `standing_link.updated`, `build.expiring`, `build.file_missing` and
-`tester.installed`. A new webhook gets all of them except `tester.installed` unless you name them.
+Events: `build.published`, `standing_link.updated`, `build.expiring`, `build.file_missing`,
+`tester.installed`, `feedback.received` and `feedback.status_changed`. A new webhook gets all of
+them except `tester.installed` and `feedback.status_changed` unless you name them.
 
 ---
 
@@ -645,6 +649,25 @@ Events: `build.published`, `standing_link.updated`, `build.expiring`, `build.fil
 > `betadrop_inspect`, but cannot publish, delete, or change links, devices or webhooks.
 
 > ⚠️ The plaintext token is shown **exactly once** at creation. Copy it immediately!
+
+---
+
+### Apps and testers (Pro and Studio)
+
+Tester groups are a server switch. While it is off, `betadrop_list_apps` still lists apps and
+`betadrop_set_app_private` can still make an app public again; every other tool here, and making an
+app private, answers that tester groups are not available.
+
+| Tool | What It Does |
+|------|--------------|
+| `betadrop_list_apps` | Builds grouped by bundle ID, with the build each platform serves |
+| `betadrop_set_app_private` | Testers only: the app installs from invited testers' personal links alone |
+| `betadrop_list_tester_groups` | Tester groups and the app each one follows |
+| `betadrop_create_tester_group` | A group whose testers get every new build of an app |
+| `betadrop_list_testers` | Each tester's status: invited, not opened, behind, up to date |
+| `betadrop_invite_testers` | Invite people by email; they confirm before anything else is sent |
+| `betadrop_remind_testers` | Email everyone not on the newest build (once a day each) |
+| `betadrop_remove_tester` | Take a tester out of a group |
 
 ---
 
@@ -723,6 +746,29 @@ BETADROP_TOKEN=bd_live_xxx betadrop-mcp
 
 **The iOS build downloads on the phone but will not open?**
 - An ad-hoc `.ipa` only installs on devices that were in the provisioning profile when it was signed — publishing it does not change that. Send the tester the [UDID checker](https://betadrop.app/udid-checker/), add the device in the Apple Developer portal, and re-sign.
+
+---
+
+## 🆕 What's new in 0.6.0
+
+- **Eleven more tools, 46 in all.** The hosted connector has 39 of them; the local-only tools are
+  the same seven as before.
+- **Apps:** `betadrop_list_apps` groups builds by bundle ID and shows the build each platform
+  serves. `betadrop_set_app_private` limits an app to invited testers' personal links.
+- **Tester groups:** `betadrop_list_tester_groups`, `betadrop_create_tester_group`,
+  `betadrop_list_testers`, `betadrop_invite_testers`, `betadrop_remind_testers` and
+  `betadrop_remove_tester`. Tester groups are a server switch: while it is off these tools say so,
+  and making an app private is refused.
+- **Feedback:** `betadrop_get_feedback` shows each report's ID and status.
+  `betadrop_set_feedback_status` moves a report to new, in progress, resolved or closed, and
+  `betadrop_send_feedback_to_tracker` creates a Linear or Jira issue from it where integrations are
+  switched on.
+- **Webhooks:** `betadrop_update_webhook` changes a webhook's events or description, limits it to
+  some apps, or switches it on or off. Webhooks can listen to two new events, `feedback.received`
+  and `feedback.status_changed`, and `betadrop_create_webhook` formats Microsoft Teams (Workflows)
+  URLs as chat messages, as it already did for Slack and Discord.
+- **`betadrop_inspect` shows the server's store-readiness and security findings** for an `.ipa` or
+  `.apk` on a signed-in account. They never change the install-link verdict.
 
 ---
 
@@ -826,4 +872,3 @@ trip to the browser, a ⭐ helps other mobile teams find it.
 ## License
 
 MIT
-<!-- re-indexed 2026-11-25 -->

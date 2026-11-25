@@ -41,7 +41,13 @@ function serverSection(r: InspectReport): string {
   return (
     `**Install link (BetaDrop)** — ${r.app.name ?? r.fileName} ${r.app.version ?? ""}${r.app.buildNumber ? ` (${r.app.buildNumber})` : ""} · ${r.app.bundleId ?? ""}\n` +
     detail +
-    r.checks.map((c) => `${mark(c.level)} ${c.message}`).join("\n")
+    r.checks.map((c) => `${mark(c.level)} ${c.message}`).join("\n") +
+    // The server's store-readiness and security findings (gap 4). They never change the verdict.
+    (r.findings && r.findings.length > 0
+      ? `\n\nStore readiness and security:\n${r.findings
+          .map((f) => `${f.level === "info" ? "·" : mark(f.level)} ${f.message}${f.masvs ? ` (${f.masvs})` : ""}`)
+          .join("\n")}`
+      : "")
   );
 }
 

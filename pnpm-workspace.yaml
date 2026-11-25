@@ -1,0 +1,6 @@
+# esbuild (used by tsup and vitest) runs an install script. pnpm 11 stops the install unless it
+# is allowed (allowBuilds); pnpm 10, which Glama's build image uses, reads onlyBuiltDependencies.
+allowBuilds:
+  esbuild: true
+onlyBuiltDependencies:
+  - esbuild

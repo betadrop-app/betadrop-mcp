@@ -826,3 +826,4 @@ trip to the browser, a ⭐ helps other mobile teams find it.
 ## License
 
 MIT
+<!-- re-indexed 2026-11-25 -->
